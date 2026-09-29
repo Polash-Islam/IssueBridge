@@ -1,0 +1,12 @@
+python -m pip install -r requirements.txt --trusted-host pypi.org --trusted-host files.pythonhosted.org
+psql -U postgres
+CREATE USER frc_portal WITH PASSWORD 'frc_portal';
+
+CREATE DATABASE frc_portal OWNER frc_portal;
+
+GRANT ALL PRIVILEGES ON DATABASE frc_portal TO frc_portal;
+pip install whitenoise
+
+
+win + R 
+shell:startup
