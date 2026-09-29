@@ -16,7 +16,7 @@
       <form method="post" class="auth-form-card">
         {% csrf_token %}
         <span class="auth-kicker">OFFICIAL INTERNAL PORTAL</span>
-        <h1>Welcome to<br><em>IssueBridge.</em></h1>
+        <h1>Welcome to <em>IssueBridge, FRC</em></h1>
         <p class="auth-lead">The Financial Reporting Council’s secure platform for issues, assignments, approvals, and accountable resolution.</p>
         <div class="access-context"><span>Authorized personnel only</span><span>Role-based access</span></div>
         {% if form.errors %}<div class="alert alert-error"><span>The email or password is incorrect, or the account is awaiting Director approval.</span></div>{% endif %}
@@ -29,17 +29,6 @@
       </form>
     </div>
     <footer class="auth-footer"><span>© {% now "Y" %} Financial Reporting Council</span><span>Government of Bangladesh · Dhaka</span></footer>
-  </section>
-  <section class="auth-story-panel auth-story-panel-v3">
-    <div class="auth-grid-lines"></div><div class="national-emblem"><i></i></div><div class="hero-orb hero-orb-one"></div><div class="hero-orb hero-orb-two"></div>
-    <div class="story-top"><span class="live-dot"><i></i> FINANCIAL REPORTING COUNCIL</span><span>GOVERNMENT OF BANGLADESH</span></div>
-    <div class="story-copy"><span class="story-index">PUBLIC SERVICE · CLEAR ACCOUNTABILITY</span><h2>Issues connected.<br><em>Responsibilities clear.</em><br>Decisions recorded.</h2><p>A single institutional workspace for coordinated service delivery across every FRC division.</p></div>
-    <div class="workflow-steps">
-      <article><b>01</b><span><strong>Register & route</strong><small>Every issue reaches its responsible authority</small></span><i>→</i></article>
-      <article><b>02</b><span><strong>Resolve & review</strong><small>Work remains visible and technically verified</small></span><i>→</i></article>
-      <article><b>03</b><span><strong>Confirm & close</strong><small>The requester validates the final outcome</small></span><i>✓</i></article>
-    </div>
-    <div class="story-principles"><div><strong>Secure</strong><span>PROTECTED BY DESIGN</span></div><div><strong>Connected</strong><span>DIVISIONS ALIGNED</span></div><div><strong>Traceable</strong><span>END-TO-END HISTORY</span></div></div>
   </section>
 </main>
 {% endblock %}

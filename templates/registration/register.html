@@ -3,8 +3,26 @@
 {% block title %}Request an Officer account · IssueBridge{% endblock %}
 {% block body_class %}login-page registration-page{% endblock %}
 {% block guest_content %}
-<main class="registration-shell">
-  <section class="registration-brand-panel"><a class="official-brand light" href="{% url 'login' %}"><img src="{% get_media_prefix %}FRC_Logo.png" alt="Financial Reporting Council Bangladesh"><span><strong class="product-name">Issue<span>Bridge</span></strong><small>Officer account request</small></span></a><div><span class="auth-kicker">CONTROLLED ONBOARDING</span><h1>Join your division’s<br>secure workspace.</h1><p>Your account remains inactive until the Director of your selected division approves it.</p><ol><li><b>1</b><span>Submit your official information</span></li><li><b>2</b><span>Your Division Director is notified</span></li><li><b>3</b><span>Sign in after approval</span></li></ol><div class="expiry-warning"><strong>One-day approval window</strong><span>Unapproved account requests are automatically deleted after 24 hours.</span></div></div></section>
-  <section class="registration-form-panel"><div class="registration-form-head"><div><span class="eyebrow">OFFICER REGISTRATION</span><h2>Create your account request</h2><p>Use accurate official information so your Director can identify you.</p></div><a href="{% url 'login' %}">← Sign in</a></div><form method="post" enctype="multipart/form-data" class="registration-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid two">{% for field in form %}<div class="field {% if field.name == 'profile_photo' %}span-two{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <b>*</b>{% endif %}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}</div>{% endfor %}</div><label class="registration-consent"><input type="checkbox" required> <span>I confirm that these details identify me as an Officer of the selected FRC division.</span></label><button class="btn btn-primary btn-block" type="submit">Send approval request <span>→</span></button></form></section>
+<main class="registration-shell registration-shell-white">
+  <section class="registration-form-panel">
+    <header class="registration-page-header">
+      <div class="govt-identity">
+        <span class="govt-line"><i></i> Government of the People’s Republic of Bangladesh</span>
+        <a class="official-brand" href="{% url 'login' %}"><img src="{% get_media_prefix %}FRC_Logo.png" alt="Financial Reporting Council Bangladesh"><span><strong class="product-name">Issue<span>Bridge</span></strong><small>Officer account registration</small></span></a>
+      </div>
+      <a class="registration-signin" href="{% url 'login' %}">← Return to sign in</a>
+    </header>
+    <div class="registration-content">
+      <div class="registration-form-head"><div><span class="eyebrow">OFFICER REGISTRATION</span><h2>Create your account request</h2><p>Use accurate official information so your Division Director can verify and approve your access.</p></div></div>
+      <div class="registration-process">
+        <div><b>01</b><span><strong>Submit details</strong><small>Provide your official information</small></span></div>
+        <div><b>02</b><span><strong>Director review</strong><small>Your Division Director is notified</small></span></div>
+        <div><b>03</b><span><strong>Access IssueBridge</strong><small>Sign in after approval</small></span></div>
+        <div class="registration-expiry"><b>24H</b><span><strong>Approval window</strong><small>Unapproved requests are deleted after one day</small></span></div>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="registration-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid two">{% for field in form %}<div class="field {% if field.name == 'profile_photo' %}span-two{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <b>*</b>{% endif %}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}</div>{% endfor %}</div><label class="registration-consent"><input type="checkbox" required> <span>I confirm that these details identify me as an Officer of the selected FRC division.</span></label><button class="btn btn-primary btn-block" type="submit">Send approval request <span>→</span></button></form>
+    </div>
+    <footer class="auth-footer"><span>© {% now "Y" %} Financial Reporting Council</span><span>Government of Bangladesh · Dhaka</span></footer>
+  </section>
 </main>
 {% endblock %}
