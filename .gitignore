@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+media/*
+!media/FRC_Logo.png
+staticfiles/
+.coverage
+htmlcov/

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ ticket.ticket_number }} · IssueBridge{% endblock %}
+{% block content %}
+<div class="ticket-topline"><a href="{% url 'ticket_list' %}">Tickets</a><span>/</span><strong>{{ ticket.ticket_number }}</strong></div>
+<div class="ticket-heading">
+  <div><div class="ticket-id-row"><span class="division-chip">{{ ticket.requesting_division.code }}</span><span>{{ ticket.ticket_number }}</span>{% if ticket.is_overdue %}<span class="overdue-flag">Overdue</span>{% endif %}</div><h1>{{ ticket.title }}</h1><p>Reported by <strong>{{ ticket.requester.full_name }}</strong> · {{ ticket.created_at|date:"d M Y, g:i A" }}</p></div>
+  <div class="ticket-heading-actions"><span class="status-badge large" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span><button class="icon-button">•••</button></div>
+</div>
+
+<div class="ticket-layout">
+  <div class="ticket-main">
+    <nav class="content-tabs"><a href="#overview" class="active">Overview</a><a href="#discussion">Discussion <span>{{ comments|length }}</span></a><a href="#activity">Activity</a></nav>
+
+    <section class="panel ticket-section" id="overview">
+      <div class="ticket-section-head"><h2>Description</h2></div>
+      <div class="rich-copy">{{ ticket.description|linebreaks }}</div>
+      {% if ticket.expected_behavior or ticket.actual_behavior %}<div class="behavior-grid"><div><span>EXPECTED BEHAVIOR</span><p>{{ ticket.expected_behavior|default:"Not specified"|linebreaksbr }}</p></div><div><span>ACTUAL BEHAVIOR</span><p>{{ ticket.actual_behavior|default:"Not specified"|linebreaksbr }}</p></div></div>{% endif %}
+      {% if ticket.module_page or ticket.browser_device %}<div class="context-strip">{% if ticket.module_page %}<div><small>MODULE / PAGE</small><strong>{{ ticket.module_page }}</strong></div>{% endif %}{% if ticket.browser_device %}<div><small>BROWSER / DEVICE</small><strong>{{ ticket.browser_device }}</strong></div>{% endif %}</div>{% endif %}
+      {% if ticket.additional_notes %}<div class="additional-note"><strong>Additional notes</strong><p>{{ ticket.additional_notes|linebreaksbr }}</p></div>{% endif %}
+    </section>
+
+    <section class="panel ticket-section">
+      <div class="ticket-section-head"><div><h2>Attachments</h2><p>{{ ticket.attachments.count }} file{{ ticket.attachments.count|pluralize }}</p></div></div>
+      <div class="attachment-grid">{% for attachment in ticket.attachments.all %}<a href="{% url 'attachment_download' attachment.pk %}" target="_blank" class="attachment-card">{% if attachment.is_image %}<img src="{% url 'attachment_download' attachment.pk %}" alt="{{ attachment.original_name }}">{% else %}<span class="file-type">{{ attachment.original_name|slice:"-4:"|upper }}</span>{% endif %}<span><strong>{{ attachment.original_name|truncatechars:32 }}</strong><small>{{ attachment.file_size|filesizeformat }} · {{ attachment.uploaded_by.full_name }}</small></span><i>↓</i></a>{% empty %}<div class="empty-mini">No supporting files have been attached.</div>{% endfor %}</div>
+    </section>
+
+    {% if active_assignment %}<section class="panel assignment-summary"><div class="assignment-symbol">↗</div><div><span>ACTIVE ASSIGNMENT</span><h3>{{ active_assignment.task_description }}</h3>{% if active_assignment.technical_instructions %}<p>{{ active_assignment.technical_instructions|linebreaksbr }}</p>{% endif %}<div class="assignment-meta"><span>Assigned by <strong>{{ active_assignment.assigned_by.full_name }}</strong></span>{% if active_assignment.deadline %}<span>Due <strong>{{ active_assignment.deadline|date:"d M Y, g:i A" }}</strong></span>{% endif %}</div></div></section>{% endif %}
+
+    <section class="panel ticket-section" id="discussion">
+      <div class="ticket-section-head"><div><h2>Discussion</h2><p>Updates remain attached to this ticket’s record.</p></div></div>
+      <div class="comment-list">{% for comment in comments %}<article class="comment {% if comment.visibility == 'INTERNAL' %}internal-comment{% endif %}"><span class="avatar">{{ comment.author.first_name|first }}{{ comment.author.last_name|first }}</span><div><div class="comment-head"><strong>{{ comment.author.full_name }}</strong><span>{{ comment.author.designation|default:comment.author.division.code }}</span><time>{{ comment.created_at|timesince }} ago</time>{% if comment.visibility == 'INTERNAL' %}<em>🔒 Internal IT</em>{% endif %}</div><div class="comment-body">{{ comment.body|linebreaks }}</div>{% if comment.attachments.exists %}<div class="comment-files">{% for file in comment.attachments.all %}<a href="{% url 'attachment_download' file.pk %}" target="_blank">📎 {{ file.original_name }}</a>{% endfor %}</div>{% endif %}</div></article>{% empty %}<div class="empty-mini">No comments yet. Start the discussion below.</div>{% endfor %}</div>
+      <form class="comment-composer" action="{% url 'comment_add' ticket.ticket_number %}" method="post" enctype="multipart/form-data">{% csrf_token %}<span class="avatar">{{ user.first_name|first }}{{ user.last_name|first }}</span><div class="composer-body">{{ comment_form.body }}<div class="composer-actions"><div>{{ comment_form.visibility }}<label class="attach-button">📎 Attach{{ comment_form.attachments }}</label></div><button class="btn btn-primary btn-small">Post comment</button></div></div></form>
+    </section>
+
+    <section class="panel ticket-section" id="activity">
+      <div class="ticket-section-head"><div><h2>Activity history</h2><p>An immutable record of material actions.</p></div></div>
+      <div class="timeline">{% for event in history %}<div class="timeline-event"><i></i><div><p>{{ event.description }}</p><span>{% if event.actor %}{{ event.actor.full_name }} · {% endif %}{{ event.created_at|date:"d M Y, g:i A" }}</span></div><em>{{ event.action|cut:"_"|title }}</em></div>{% empty %}<div class="empty-mini">No activity recorded.</div>{% endfor %}</div>
+    </section>
+  </div>
+
+  <aside class="ticket-sidebar">
+    {% if can_review %}<details class="panel action-card" open><summary><span><i class="action-icon blue">✓</i><strong>Review intake</strong></span><b>⌄</b></summary><form action="{% url 'ticket_review' ticket.ticket_number %}" method="post">{% csrf_token %}<div class="field"><label>Decision</label>{{ review_form.decision }}</div><div class="field"><label>Reason / response</label>{{ review_form.reason }}</div><button class="btn btn-primary btn-block">Submit review</button></form></details>{% endif %}
+    {% if can_assign %}<details class="panel action-card"><summary><span><i class="action-icon green">↗</i><strong>{% if ticket.current_assignee %}Reassign work{% else %}Assign responsible person{% endif %}</strong></span><b>⌄</b></summary><form action="{% url 'ticket_assign' ticket.ticket_number %}" method="post">{% csrf_token %}<div class="field"><label>Responsible person</label>{{ assignment_form.assigned_to }}</div><div class="field"><label>Task description</label>{{ assignment_form.task_description }}</div><div class="field"><label>Technical instructions</label>{{ assignment_form.technical_instructions }}</div><div class="field"><label>Expected output</label>{{ assignment_form.expected_output }}</div><div class="field"><label>Deadline</label>{{ assignment_form.deadline }}</div><div class="field"><label>Additional notes</label>{{ assignment_form.additional_notes }}</div><button class="btn btn-primary btn-block">Confirm assignment</button></form></details>{% endif %}
+    {% if can_technical_verify %}<details class="panel action-card verification-card" open><summary><span><i class="action-icon violet">◇</i><strong>Senior IT technical check</strong></span><b>⌄</b></summary><form action="{% url 'ticket_technical_verify' ticket.ticket_number %}" method="post">{% csrf_token %}<p class="form-intro">Check the responsible person's work. Approval sends the ticket to the original requester; return sends it back to the assignee.</p>{{ technical_verification_form.decision }}<div class="field"><label>Technical verification note</label>{{ technical_verification_form.reason }}</div><button class="btn btn-primary btn-block">Submit technical decision</button></form></details>{% endif %}
+    {% if can_verify %}<details class="panel action-card verification-card" open><summary><span><i class="action-icon violet">◇</i><strong>Final requester verification</strong></span><b>⌄</b></summary><form action="{% url 'ticket_verify' ticket.ticket_number %}" method="post">{% csrf_token %}<p class="form-intro">The Senior IT Consultant has approved the technical work. Test the solution, then close it or report the remaining problem.</p>{{ verification_form.decision }}<div class="field"><label>Verification note</label>{{ verification_form.reason }}</div><button class="btn btn-primary btn-block">Submit final verification</button></form></details>{% endif %}
+    {% if has_transitions %}<details class="panel action-card"><summary><span><i class="action-icon orange">→</i><strong>Update status</strong></span><b>⌄</b></summary><form action="{% url 'ticket_transition' ticket.ticket_number %}" method="post">{% csrf_token %}<div class="field"><label>Move ticket to</label>{{ transition_form.to_status }}</div><div class="field"><label>Progress note</label>{{ transition_form.comment }}</div><button class="btn btn-primary btn-block">Update status</button></form></details>{% endif %}
+
+    <section class="panel details-card"><div class="details-head"><h2>Ticket details</h2></div><dl>
+      <div><dt>Status</dt><dd><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></dd></div>
+      <div><dt>Priority</dt><dd><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></dd></div>
+      <div><dt>Requester</dt><dd><span class="person"><i>{{ ticket.requester.first_name|first }}{{ ticket.requester.last_name|first }}</i>{{ ticket.requester.full_name }}</span></dd></div>
+      <div><dt>Division</dt><dd>{{ ticket.requesting_division.name }}</dd></div><div><dt>Product</dt><dd>{{ ticket.product.name }}</dd></div><div><dt>Category</dt><dd>{{ ticket.category.name }}</dd></div>
+      <div><dt>Assigned to</dt><dd>{% if ticket.current_assignee %}<span class="person"><i>{{ ticket.current_assignee.first_name|first }}{{ ticket.current_assignee.last_name|first }}</i>{{ ticket.current_assignee.full_name }}</span>{% else %}<span class="unassigned-pill">Unassigned</span>{% endif %}</dd></div>
+      <div><dt>Identified</dt><dd>{{ ticket.problem_identified_at|date:"d M Y, g:i A" }}</dd></div><div><dt>Created</dt><dd>{{ ticket.created_at|date:"d M Y, g:i A" }}</dd></div><div><dt>Deadline</dt><dd>{% if ticket.deadline %}<span class="deadline {% if ticket.is_overdue %}danger{% endif %}"><strong>{{ ticket.deadline|date:"d M Y, g:i A" }}</strong><small>{{ ticket.due_label }}</small></span>{% else %}Not set{% endif %}</dd></div>
+    </dl></section>
+  </aside>
+</div>
+{% endblock %}

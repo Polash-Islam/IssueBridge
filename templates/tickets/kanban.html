@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Kanban Board · IssueBridge{% endblock %}
+{% block content %}
+<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">VISUAL WORKFLOW</span><h1>Ticket board</h1><p>Move work through approved workflow steps. Review, assignment, and verification gates remain protected.</p></div><a class="btn btn-primary" href="{% url 'ticket_create' %}"><span class="btn-plus">+</span> Create ticket</a></div>
+<form class="kanban-toolbar" method="get"><div class="filter-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input name="q" value="{{ q }}" placeholder="Search this board…"></div><select name="division"><option value="">All divisions</option>{% for item in divisions %}<option value="{{ item.code }}" {% if selected_division == item.code %}selected{% endif %}>{{ item.code }}</option>{% endfor %}</select><select name="priority"><option value="">All priorities</option>{% for item in priorities %}<option value="{{ item.code }}" {% if selected_priority == item.code %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select><button class="btn btn-secondary">Apply</button><span class="board-guide"><i>↔</i> Drag cards where permitted</span></form>
+<form class="csrf-provider">{% csrf_token %}</form>
+<div class="kanban-scroll"><div class="kanban-board" data-move-url="{% url 'kanban_move' %}">
+  {% for column in columns %}<section class="kanban-column tone-{{ column.tone }}" data-status="{{ column.target }}">
+    <header><span><i></i>{{ column.name }}</span><b>{{ column.tickets|length }}</b></header>
+    <div class="kanban-dropzone">
+      {% for ticket in column.tickets %}<article class="kanban-card {% if ticket.allowed_kanban_codes %}can-drag{% endif %}" draggable="{% if ticket.allowed_kanban_codes %}true{% else %}false{% endif %}" data-ticket="{{ ticket.ticket_number }}" data-status="{{ ticket.status.code }}" data-allowed="{{ ticket.allowed_kanban_codes|join:',' }}">
+        <div class="kanban-card-top"><span class="division-chip">{{ ticket.requesting_division.code }}</span><span class="priority-dot"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></div>
+        <a href="{% url 'ticket_detail' ticket.ticket_number %}"><small>{{ ticket.ticket_number }}</small><h3>{{ ticket.title }}</h3></a>
+        {% if ticket.status.code != column.target %}<span class="substatus">{{ ticket.status.name }}</span>{% endif %}
+        <div class="kanban-meta"><span title="Comments">◌ {{ ticket.comments.count }}</span><span title="Attachments">⌁ {{ ticket.attachments.count }}</span>{% if ticket.deadline %}<time class="{% if ticket.is_overdue %}danger{% endif %}">{{ ticket.deadline|date:"d M" }}</time>{% endif %}</div>
+        <footer>{% if ticket.current_assignee %}<span class="person"><i>{{ ticket.current_assignee.first_name|first }}{{ ticket.current_assignee.last_name|first }}</i>{{ ticket.current_assignee.full_name }}</span>{% else %}<span class="muted">Unassigned</span>{% endif %}<b class="drag-handle">⠿</b></footer>
+      </article>{% empty %}<div class="kanban-empty"><span>＋</span><p>No tickets here</p></div>{% endfor %}
+    </div>
+  </section>{% endfor %}
+</div></div>
+<div class="board-toast" id="boardToast" role="status"></div>
+{% endblock %}

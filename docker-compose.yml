@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: frc_portal
+      POSTGRES_USER: frc_portal
+      POSTGRES_PASSWORD: frc_portal
+    ports:
+      - "5432:5432"
+    volumes:
+      - frc_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frc_portal -d frc_portal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  frc_postgres_data:

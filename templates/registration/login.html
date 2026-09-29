@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Secure sign in · IssueBridge{% endblock %}
+{% block body_class %}login-page login-v3{% endblock %}
+{% block guest_content %}
+<main class="auth-shell auth-shell-v3">
+  <section class="auth-form-panel auth-form-panel-v3">
+    <header class="auth-header">
+      <div class="govt-identity">
+        <span class="govt-line"><i></i> Government of the People’s Republic of Bangladesh</span>
+        <a class="official-brand" href="{% url 'login' %}"><img src="{% get_media_prefix %}FRC_Logo.png" alt="Financial Reporting Council Bangladesh"><span><strong class="product-name">Issue<span>Bridge</span></strong><small>Official internal service portal</small></span></a>
+      </div>
+      <span class="secure-label"><i></i> Secure access</span>
+    </header>
+    <div class="auth-form-center">
+      <form method="post" class="auth-form-card">
+        {% csrf_token %}
+        <span class="auth-kicker">OFFICIAL INTERNAL PORTAL</span>
+        <h1>Welcome to<br><em>IssueBridge.</em></h1>
+        <p class="auth-lead">The Financial Reporting Council’s secure platform for issues, assignments, approvals, and accountable resolution.</p>
+        <div class="access-context"><span>Authorized personnel only</span><span>Role-based access</span></div>
+        {% if form.errors %}<div class="alert alert-error"><span>The email or password is incorrect, or the account is awaiting Director approval.</span></div>{% endif %}
+        <div class="auth-field"><label for="id_username">Official email</label><div><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 7l8 6 8-6"/></svg><input type="text" name="username" autofocus autocomplete="username" required id="id_username" placeholder="name@frc.gov.bd"></div></div>
+        <div class="auth-field"><div class="auth-label-row"><label for="id_password">Password</label><span>Protected credential</span></div><div><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><input type="password" name="password" autocomplete="current-password" required id="id_password" placeholder="Enter your password"><button type="button" class="password-toggle" aria-label="Show password">Show</button></div></div>
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button class="auth-submit" type="submit"><span>Enter secure workspace</span><i>→</i></button>
+        <div class="auth-register"><span>New FRC Officer?</span><a href="{% url 'register' %}">Request an account <b>→</b></a></div>
+        <div class="auth-support"><svg viewBox="0 0 24 24"><path d="M12 22c5-2 8-6 8-12V5l-8-3-8 3v5c0 6 3 10 8 12Z"/><path d="m9 12 2 2 4-4"/></svg><span>Access is role-controlled, logged, and protected by FRC information-security policies.</span></div>
+      </form>
+    </div>
+    <footer class="auth-footer"><span>© {% now "Y" %} Financial Reporting Council</span><span>Government of Bangladesh · Dhaka</span></footer>
+  </section>
+  <section class="auth-story-panel auth-story-panel-v3">
+    <div class="auth-grid-lines"></div><div class="national-emblem"><i></i></div><div class="hero-orb hero-orb-one"></div><div class="hero-orb hero-orb-two"></div>
+    <div class="story-top"><span class="live-dot"><i></i> FINANCIAL REPORTING COUNCIL</span><span>GOVERNMENT OF BANGLADESH</span></div>
+    <div class="story-copy"><span class="story-index">PUBLIC SERVICE · CLEAR ACCOUNTABILITY</span><h2>Issues connected.<br><em>Responsibilities clear.</em><br>Decisions recorded.</h2><p>A single institutional workspace for coordinated service delivery across every FRC division.</p></div>
+    <div class="workflow-steps">
+      <article><b>01</b><span><strong>Register & route</strong><small>Every issue reaches its responsible authority</small></span><i>→</i></article>
+      <article><b>02</b><span><strong>Resolve & review</strong><small>Work remains visible and technically verified</small></span><i>→</i></article>
+      <article><b>03</b><span><strong>Confirm & close</strong><small>The requester validates the final outcome</small></span><i>✓</i></article>
+    </div>
+    <div class="story-principles"><div><strong>Secure</strong><span>PROTECTED BY DESIGN</span></div><div><strong>Connected</strong><span>DIVISIONS ALIGNED</span></div><div><strong>Traceable</strong><span>END-TO-END HISTORY</span></div></div>
+  </section>
+</main>
+{% endblock %}

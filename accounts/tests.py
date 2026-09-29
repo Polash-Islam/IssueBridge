@@ -1,0 +1,155 @@
+from datetime import timedelta
+
+from django.core.management import call_command
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from communications.models import Notification
+from core.models import Division
+from .models import AccountApprovalRequest, Role, User
+from .services import purge_expired_account_requests
+
+
+class AccountManagementTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command("seed_demo", with_demo_data=True, verbosity=0)
+        cls.consultant = User.objects.get(email="consultant@frc.gov.bd")
+        cls.it_officer = User.objects.get(email="it.officer@frc.gov.bd")
+        cls.it_director = User.objects.get(email="it.director@frc.gov.bd")
+        cls.apr_director = User.objects.get(email="apr.director@frc.gov.bd")
+
+    def _creation_data(self, **overrides):
+        data = {
+            "first_name": "New", "last_name": "Officer", "employee_id": "FRC-2200",
+            "email": "new.officer@frc.gov.bd", "mobile": "01700000000",
+            "designation": "IT Officer", "division": Division.objects.get(code="IT").pk,
+            "role": Role.objects.get(code="officer").pk, "is_active": "on",
+            "password1": "StrongTestPass2026!", "password2": "StrongTestPass2026!",
+        }
+        data.update(overrides)
+        return data
+
+    def test_senior_it_can_create_only_it_officers(self):
+        self.client.force_login(self.consultant)
+        response = self.client.post(reverse("user_create"), self._creation_data())
+        self.assertRedirects(response, reverse("user_list"))
+        created = User.objects.get(email="new.officer@frc.gov.bd")
+        self.assertEqual(created.division.code, "IT")
+        self.assertEqual(created.role_code, "officer")
+        self.assertEqual(created.supervisor, self.consultant)
+
+        response = self.client.post(reverse("user_create"), self._creation_data(
+            email="blocked@frc.gov.bd", employee_id="FRC-2201",
+            role=Role.objects.get(code="senior-it-consultant").pk,
+        ))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(email="blocked@frc.gov.bd").exists())
+
+    def test_senior_it_cannot_edit_non_it_officer(self):
+        self.client.force_login(self.consultant)
+        response = self.client.get(reverse("user_edit", args=[self.apr_director.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_it_director_can_create_senior_it_consultant(self):
+        self.client.force_login(self.it_director)
+        response = self.client.post(reverse("user_create"), self._creation_data(
+            first_name="Senior", last_name="Consultant", email="senior.two@frc.gov.bd",
+            employee_id="FRC-2202", designation="Senior IT Consultant",
+            role=Role.objects.get(code="senior-it-consultant").pk,
+        ))
+        self.assertRedirects(response, reverse("user_list"))
+        created = User.objects.get(email="senior.two@frc.gov.bd")
+        self.assertEqual(created.supervisor, self.it_director)
+        self.assertEqual(created.role_code, "senior-it-consultant")
+
+    def test_director_designation_is_always_executive_director(self):
+        self.apr_director.designation = "Changed manually"
+        self.apr_director.save()
+        self.apr_director.refresh_from_db()
+        self.assertEqual(self.apr_director.designation, "Executive Director")
+
+    def test_each_user_can_view_and_edit_own_profile(self):
+        self.client.force_login(self.it_officer)
+        self.assertEqual(self.client.get(reverse("profile")).status_code, 200)
+        response = self.client.post(reverse("profile_edit"), {
+            "first_name": "Arif", "last_name": "Hasan", "mobile": "01812345678",
+        })
+        self.assertRedirects(response, reverse("profile"))
+        self.it_officer.refresh_from_db()
+        self.assertEqual(self.it_officer.mobile, "01812345678")
+
+
+class OfficerSelfRegistrationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command("seed_demo", with_demo_data=True, verbosity=0)
+        cls.apr = Division.objects.get(code="APR")
+        cls.apr_director = User.objects.get(email="apr.director@frc.gov.bd")
+        cls.frm_director = User.objects.create_user(
+            username="frm.director.test@frc.gov.bd", email="frm.director.test@frc.gov.bd",
+            password="StrongTestPass2026!", first_name="FRM", last_name="Director",
+            division=Division.objects.get(code="FRM"), role=Role.objects.get(code="director"),
+        )
+
+    def registration_data(self, **overrides):
+        data = {
+            "first_name": "New", "last_name": "APR Officer", "employee_id": "SELF-1001",
+            "email": "self.registered@frc.gov.bd", "mobile": "01700000001",
+            "designation": "Officer", "division": self.apr.pk,
+            "password1": "StrongSelfPass2026!", "password2": "StrongSelfPass2026!",
+        }
+        data.update(overrides)
+        return data
+
+    def create_pending_account(self):
+        response = self.client.post(reverse("register"), self.registration_data())
+        self.assertRedirects(response, reverse("registration_pending"))
+        user = User.objects.get(email="self.registered@frc.gov.bd")
+        return user, user.approval_request
+
+    def test_login_page_uses_frc_logo_and_registration_link(self):
+        response = self.client.get(reverse("login"))
+        self.assertContains(response, "/media/FRC_Logo.png")
+        self.assertContains(response, reverse("register"))
+        self.assertNotContains(response, "APR Software access review")
+
+    def test_registration_creates_inactive_officer_and_notifies_division_director(self):
+        user, approval = self.create_pending_account()
+        self.assertFalse(user.is_active)
+        self.assertEqual(user.role_code, "officer")
+        self.assertEqual(approval.division, self.apr)
+        approval_window = approval.expires_at - approval.requested_at
+        self.assertGreaterEqual(approval_window, timedelta(hours=23, minutes=59))
+        self.assertLessEqual(approval_window, timedelta(days=1, minutes=1))
+        self.assertFalse(self.client.login(username=user.email, password="StrongSelfPass2026!"))
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.apr_director, approval_request=approval,
+            kind=Notification.Kind.ACCOUNT_APPROVAL,
+        ).exists())
+
+    def test_matching_director_can_approve_and_enable_login(self):
+        user, approval = self.create_pending_account()
+        self.client.force_login(self.apr_director)
+        response = self.client.post(reverse("account_approve", args=[approval.pk]))
+        self.assertRedirects(response, reverse("account_approval_list"))
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertEqual(user.supervisor, self.apr_director)
+        self.client.logout()
+        self.assertTrue(self.client.login(username=user.email, password="StrongSelfPass2026!"))
+
+    def test_other_division_director_cannot_approve(self):
+        _, approval = self.create_pending_account()
+        self.client.force_login(self.frm_director)
+        self.assertEqual(
+            self.client.post(reverse("account_approve", args=[approval.pk])).status_code, 403,
+        )
+
+    def test_expired_pending_account_is_deleted(self):
+        user, approval = self.create_pending_account()
+        approval.expires_at = timezone.now() - timedelta(seconds=1)
+        approval.save(update_fields=["expires_at"])
+        self.assertEqual(purge_expired_account_requests(), 1)
+        self.assertFalse(User.objects.filter(pk=user.pk).exists())

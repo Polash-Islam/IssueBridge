@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Add user · IssueBridge{% endblock %}
+{% block content %}
+<div class="back-link"><a href="{% url 'user_list' %}">← Back to users</a></div>
+<div class="page-heading compact-heading"><span class="eyebrow">ACCESS MANAGEMENT</span><h1>Add a user</h1><p>Create an account inside your authorized organizational scope.</p></div>
+<form method="post" enctype="multipart/form-data" class="panel simple-form">{% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="form-grid two">{% for field in form %}<div class="field {% if field.name == 'password1' or field.name == 'password2' %}password-field{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <b>*</b>{% endif %}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}</div>{% endfor %}</div>
+  <div class="form-actions"><a class="btn btn-ghost" href="{% url 'user_list' %}">Cancel</a><button class="btn btn-primary">Create account</button></div>
+</form>
+{% endblock %}

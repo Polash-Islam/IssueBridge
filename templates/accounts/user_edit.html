@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ target.full_name }} · IssueBridge{% endblock %}
+{% block content %}
+<div class="back-link"><a href="{% url 'user_list' %}">← Back to users</a></div><div class="page-heading compact-heading"><span class="eyebrow">ACCOUNT MANAGEMENT</span><h1>Edit {{ target.full_name }}</h1><p>Update role, division, status, profile details, or reset the account password.</p></div>
+<form method="post" enctype="multipart/form-data" class="panel simple-form">{% csrf_token %}{% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors }}</div>{% endif %}<div class="form-grid two">{% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <b>*</b>{% endif %}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text|safe }}</small>{% endif %}</div>{% endfor %}</div><div class="form-actions"><a class="btn btn-ghost" href="{% url 'user_list' %}">Cancel</a><button class="btn btn-primary">Save changes</button></div></form>
+{% endblock %}

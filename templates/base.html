@@ -1,0 +1,78 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="IssueBridge · Financial Reporting Council internal management portal">
+  <title>{% block title %}IssueBridge{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'js/app.js' %}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% if user.is_authenticated %}
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{% url 'dashboard' %}">
+      <span class="brand-mark"><img src="{% get_media_prefix %}FRC_Logo.png" alt="FRC"></span>
+      <span><strong class="product-name">Issue<span>Bridge</span></strong><small>Government of Bangladesh</small></span>
+    </a>
+    <nav class="side-nav" aria-label="Primary navigation">
+      <span class="nav-label">Workspace</span>
+      <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>Dashboard
+      </a>
+      <a href="{% url 'ticket_list' %}?scope=assigned">
+        <svg viewBox="0 0 24 24"><path d="M9 11 12 14 22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>My Tasks{% if nav_my_tasks_count %}<span class="nav-count attention">{{ nav_my_tasks_count }}</span>{% endif %}
+      </a>
+      <a href="{% url 'ticket_list' %}" class="{% if 'ticket' in request.resolver_match.url_name|default:'' %}active{% endif %}">
+        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 0 0 4v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 0 0-4V5Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg>Tickets
+      </a>
+      <a href="{% url 'ticket_list' %}?scope=verification">
+        <svg viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 22C7 20 4 16 4 10V5l8-3 8 3v5c0 6-3 10-8 12Z"/></svg>Verification{% if nav_verification_count %}<span class="nav-count attention">{{ nav_verification_count }}</span>{% endif %}
+      </a>
+      <a href="{% url 'notification_list' %}" class="{% if 'notification' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>Notifications{% if unread_notification_count %}<span class="nav-count attention">{{ unread_notification_count }}</span>{% endif %}</a>
+      <span class="nav-label">Manage</span>
+      <a href="{% url 'kanban' %}" class="{% if request.resolver_match.url_name == 'kanban' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M4 5h4v14H4zM10 5h4v8h-4zM16 5h4v11h-4z"/></svg>Kanban Board</a>
+      <a href="{% url 'meeting_list' %}" class="{% if 'meeting' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z"/></svg>Meetings{% if nav_meetings_count %}<span class="nav-count attention">{{ nav_meetings_count }}</span>{% endif %}</a>
+      <a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v15H3V6a2 2 0 0 1 2-2Z"/><path d="M7 13h3M14 13h3M7 17h3"/></svg>Calendar</a>
+      <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"/></svg>Reports</a>
+      {% if nav_can_manage_users %}
+      <a href="{% url 'user_list' %}" class="{% if 'user_' in request.resolver_match.url_name|default:'' or 'account_approval' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Users{% if nav_account_approval_count %}<span class="nav-count attention">{{ nav_account_approval_count }}</span>{% endif %}</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      <div class="security-dot"></div>
+      <div><strong>Protected government workspace</strong><small>FRC authorized use only</small></div>
+    </div>
+  </aside>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="icon-button mobile-menu" id="menuToggle" aria-label="Toggle navigation"><span></span><span></span><span></span></button>
+      <form class="global-search" action="{% url 'ticket_list' %}" method="get">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input name="q" placeholder="Search tickets, people, products…" value="{{ request.GET.q }}">
+        <kbd>⌘ K</kbd>
+      </form>
+      <div class="topbar-government"><i></i><span><strong>Financial Reporting Council</strong><small>Official internal portal</small></span></div>
+      <div class="top-actions">
+        <a href="{% url 'notification_list' %}" class="icon-button notification-button" aria-label="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{% if unread_notification_count %}<i></i><b>{{ unread_notification_count }}</b>{% endif %}</a>
+        <span class="top-divider"></span>
+        <div class="profile-menu">
+          <a class="profile-link" href="{% url 'profile' %}">{% if user.profile_photo %}<img class="avatar profile-image" src="{{ user.profile_photo.url }}" alt="{{ user.full_name }}">{% else %}<span class="avatar">{{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}</span>{% endif %}<span class="profile-copy"><strong>{{ user.full_name }}</strong><small>{{ user.designation|default:user.role|default:"FRC Officer" }}</small></span></a>
+          <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="text-button" title="Sign out">↗</button></form>
+        </div>
+      </div>
+    </header>
+    <main class="page-content">
+      {% if messages %}<div class="message-stack">{% for message in messages %}<div class="alert alert-{{ message.tags }}"><span>{{ message }}</span><button type="button" aria-label="Dismiss">×</button></div>{% endfor %}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% else %}
+    {% block guest_content %}{% endblock %}
+  {% endif %}
+</body>
+</html>

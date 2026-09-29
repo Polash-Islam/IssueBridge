@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}Edit profile · IssueBridge{% endblock %}
+{% block content %}
+<div class="back-link"><a href="{% url 'profile' %}">← Back to profile</a></div><div class="page-heading compact-heading"><span class="eyebrow">MY ACCOUNT</span><h1>Edit profile</h1><p>Update your name, contact number, and profile photo.</p></div><form method="post" enctype="multipart/form-data" class="panel simple-form profile-form">{% csrf_token %}<div class="form-grid two">{% for field in form %}<div class="field"><label>{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}</div><div class="form-actions"><a class="btn btn-ghost" href="{% url 'profile' %}">Cancel</a><button class="btn btn-primary">Save profile</button></div></form>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Approval pending · IssueBridge{% endblock %}
+{% block body_class %}login-page registration-page{% endblock %}
+{% block guest_content %}<main class="pending-shell"><section class="panel pending-card"><img src="{% get_media_prefix %}FRC_Logo.png" alt="Financial Reporting Council Bangladesh"><span class="pending-symbol">✓</span><span class="eyebrow">REQUEST SENT</span><h1>Director approval pending</h1><p>Your inactive Officer account request for <strong>{{ submitted.division }}</strong> was sent to the Division Director.</p><dl><div><dt>Email</dt><dd>{{ submitted.email }}</dd></div><div><dt>Approval window</dt><dd>24 hours from submission</dd></div></dl><div class="expiry-warning"><strong>Important</strong><span>If approval is not completed within one day, this pending account will be automatically deleted and you must register again.</span></div><a class="btn btn-primary btn-block" href="{% url 'login' %}">Return to sign in</a></section></main>{% endblock %}

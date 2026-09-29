@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · IssueBridge{% endblock %}
+{% block content %}
+<div class="page-heading heading-actions">
+  <div><span class="eyebrow">{{ user.division.name|default:"ORGANIZATION" }} WORKSPACE</span><h1>Good {% now "H" as hour %}{% if hour < "12" %}morning{% elif hour < "17" %}afternoon{% else %}evening{% endif %}, {{ user.first_name|default:user.username }}.</h1><p>{% if full_dashboard %}Here’s what needs attention across your service workspace.{% else %}A focused view of your own requests, assignments, and deadlines.{% endif %}</p></div>
+  <a class="btn btn-primary" href="{% url 'ticket_create' %}"><span class="btn-plus">+</span> Create ticket</a>
+</div>
+
+<section class="metric-grid">
+  <a class="metric-card accent-blue" href="{% url 'ticket_list' %}"><div class="metric-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></div><div><span>{% if full_dashboard %}Total tickets{% else %}My tickets{% endif %}</span><strong>{{ metrics.total }}</strong><small>{% if full_dashboard %}Accessible workspace{% else %}Requested or assigned to me{% endif %}</small></div></a>
+  <a class="metric-card accent-orange" href="{% url 'ticket_list' %}?status=in-progress"><div class="metric-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><span>In progress</span><strong>{{ metrics.in_progress }}</strong><small>Active work</small></div></a>
+  <a class="metric-card accent-violet" href="{% url 'ticket_list' %}?scope=verification"><div class="metric-icon"><svg viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 22C7 20 4 16 4 10V5l8-3 8 3v5c0 6-3 10-8 12Z"/></svg></div><div><span>Verification</span><strong>{{ metrics.verification }}</strong><small>Awaiting confirmation</small></div></a>
+  <a class="metric-card accent-red" href="{% url 'ticket_list' %}?scope=overdue"><div class="metric-icon"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M10 3 2 20h20L14 3a2 2 0 0 0-4 0Z"/></svg></div><div><span>Overdue</span><strong>{{ metrics.overdue }}</strong><small>Requires attention</small></div></a>
+</section>
+
+{% if full_dashboard %}<div class="dashboard-grid">
+  <section class="panel span-two">
+    <div class="panel-head"><div><h2>Division workload</h2><p>Open and total ticket volume</p></div><a href="{% url 'ticket_list' %}">View all <span>→</span></a></div>
+    <div class="workload-chart">
+      {% for row in division_counts %}<div class="workload-row"><span class="division-chip">{{ row.requesting_division__code }}</span><div><div class="workload-label"><strong>{{ row.requesting_division__name }}</strong><span>{{ row.open }} open · {{ row.total }} total</span></div><div class="progress"><i style="width: {{ row.percent }}%"></i></div></div></div>{% empty %}<div class="empty-mini">Ticket workload will appear here.</div>{% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><div><h2>Priority mix</h2><p>Current ticket distribution</p></div></div>
+    <div class="priority-list">{% for row in priority_counts %}<div><span><i style="background:{{ row.priority__color }}"></i>{{ row.priority__name }}</span><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No priority data yet.</div>{% endfor %}</div>
+  </section>
+</div>{% endif %}
+
+<div class="dashboard-grid lower-grid">
+  <section class="panel span-two flush-panel">
+    <div class="panel-head padded"><div><h2>{% if full_dashboard %}Recent tickets{% else %}My recent activity{% endif %}</h2><p>{% if full_dashboard %}Latest activity in your workspace{% else %}Only tickets requested by or assigned to you{% endif %}</p></div><a href="{% url 'ticket_list' %}">View tickets <span>→</span></a></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Ticket</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Updated</th></tr></thead><tbody>
+    {% for ticket in recent_tickets %}<tr><td><a class="ticket-cell" href="{% url 'ticket_detail' ticket.ticket_number %}"><strong>{{ ticket.ticket_number }}</strong><span>{{ ticket.title }}</span></a></td><td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></td><td><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></td><td>{% if ticket.current_assignee %}<span class="person"><i>{{ ticket.current_assignee.first_name|first }}{{ ticket.current_assignee.last_name|first }}</i>{{ ticket.current_assignee.full_name }}</span>{% else %}<span class="muted">Unassigned</span>{% endif %}</td><td><span class="muted">{{ ticket.updated_at|timesince }} ago</span></td></tr>{% empty %}<tr><td colspan="5"><div class="empty-table">No tickets yet. <a href="{% url 'ticket_create' %}">Create the first one</a>.</div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><div><h2>Due soon</h2><p>Next seven days</p></div></div>
+    <div class="due-list">{% for ticket in due_soon %}<a href="{% url 'ticket_detail' ticket.ticket_number %}"><span class="date-block"><strong>{{ ticket.deadline|date:"d" }}</strong><small>{{ ticket.deadline|date:"M"|upper }}</small></span><span><strong>{{ ticket.title|truncatechars:34 }}</strong><small>{{ ticket.ticket_number }} · {{ ticket.deadline|date:"g:i A" }}</small></span></a>{% empty %}<div class="empty-mini success-empty">✓ No deadlines due this week.</div>{% endfor %}</div>
+  </section>
+</div>
+{% endblock %}
