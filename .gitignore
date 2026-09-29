@@ -9,3 +9,4 @@ media/*
 staticfiles/
 .coverage
 htmlcov/
+venv
