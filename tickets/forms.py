@@ -89,10 +89,10 @@ class TicketCreateForm(forms.ModelForm):
             else:
                 self.fields.pop("requested_for")
                 self.fields.pop("assign_to")
-            if user.division_id and not (user.is_super_admin or user.is_senior_it):
-                self.fields["requesting_division"].queryset = Division.objects.filter(pk=user.division_id)
-                self.fields["requesting_division"].initial = user.division
-                self.fields["product"].queryset = self.fields["product"].queryset.filter(division_id=user.division_id)
+            # if user.division_id and not (user.is_super_admin or user.is_senior_it):
+            #     self.fields["requesting_division"].queryset = Division.objects.filter(pk=user.division_id)
+            #     self.fields["requesting_division"].initial = user.division
+            #     self.fields["product"].queryset = self.fields["product"].queryset.filter(division_id=user.division_id)
         for name, field in self.fields.items():
             field.widget.attrs.setdefault("class", "form-control")
             if not field.widget.attrs.get("placeholder"):
@@ -103,10 +103,10 @@ class TicketCreateForm(forms.ModelForm):
         division = cleaned.get("requesting_division")
         product = cleaned.get("product")
         can_route_across_divisions = self.user and (self.user.is_super_admin or self.user.is_senior_it)
-        if division and product and product.division_id != division.id and not can_route_across_divisions:
-            self.add_error("product", "Choose a product owned by the requesting division.")
-        if self.user and self.user.division_id and not (self.user.is_super_admin or self.user.is_senior_it) and division != self.user.division:
-            self.add_error("requesting_division", "You can only create tickets for your own division.")
+        # if division and product and product.division_id != division.id and not can_route_across_divisions:
+        #     self.add_error("product", "Choose a product owned by the requesting division.")
+        # if self.user and self.user.division_id and not (self.user.is_super_admin or self.user.is_senior_it) and division != self.user.division:
+        #     self.add_error("requesting_division", "You can only create tickets for your own division.")
         return cleaned
 
 

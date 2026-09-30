@@ -5,7 +5,8 @@ from .models import AccountApprovalRequest, Role, User
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "scope", "is_system")
+    list_display = ("name", "code", "scope", "is_division_director", "is_system")
+    list_filter = ("scope", "is_division_director", "is_system")
     search_fields = ("name", "code")
 
 

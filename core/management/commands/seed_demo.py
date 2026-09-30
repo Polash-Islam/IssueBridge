@@ -36,7 +36,15 @@ class Command(BaseCommand):
         ]
         roles = {}
         for code, name, scope in role_specs:
-            roles[code], _ = Role.objects.update_or_create(code=code, defaults={"name": name, "scope": scope, "is_system": True})
+            roles[code], _ = Role.objects.update_or_create(
+                code=code,
+                defaults={
+                    "name": name,
+                    "scope": scope,
+                    "is_system": True,
+                    "is_division_director": code == "director",
+                },
+            )
 
         category_names = [
             "Bug / Software Error", "UI / Design Issue", "Data Change", "Data Error", "New Feature Request",

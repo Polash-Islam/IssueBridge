@@ -64,11 +64,11 @@ class AccountManagementTests(TestCase):
         self.assertEqual(created.supervisor, self.it_director)
         self.assertEqual(created.role_code, "senior-it-consultant")
 
-    def test_director_designation_is_always_executive_director(self):
+    def test_director_can_keep_a_specific_designation(self):
         self.apr_director.designation = "Changed manually"
         self.apr_director.save()
         self.apr_director.refresh_from_db()
-        self.assertEqual(self.apr_director.designation, "Executive Director")
+        self.assertEqual(self.apr_director.designation, "Changed manually")
 
     def test_each_user_can_view_and_edit_own_profile(self):
         self.client.force_login(self.it_officer)
@@ -124,6 +124,23 @@ class OfficerSelfRegistrationTests(TestCase):
         self.assertGreaterEqual(approval_window, timedelta(hours=23, minutes=59))
         self.assertLessEqual(approval_window, timedelta(days=1, minutes=1))
         self.assertFalse(self.client.login(username=user.email, password="StrongSelfPass2026!"))
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.apr_director, approval_request=approval,
+            kind=Notification.Kind.ACCOUNT_APPROVAL,
+        ).exists())
+
+    def test_custom_named_head_role_is_detected_as_director(self):
+        custom_role = Role.objects.create(
+            name="Custom Division Head", code="custom-division-head",
+            scope=Role.Scope.DIVISION, is_division_director=True,
+        )
+        self.apr_director.role = custom_role
+        self.apr_director.designation = "ED APR"
+        self.apr_director.save()
+
+        user, approval = self.create_pending_account()
+
+        self.assertEqual(user.supervisor, self.apr_director)
         self.assertTrue(Notification.objects.filter(
             recipient=self.apr_director, approval_request=approval,
             kind=Notification.Kind.ACCOUNT_APPROVAL,

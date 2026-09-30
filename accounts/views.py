@@ -23,7 +23,7 @@ def register(request):
         from communications.models import Notification
         from communications.services import notify_users
         directors = User.objects.filter(
-            division=user.division, role__code="director", is_active=True,
+            division=user.division, role__is_division_director=True, is_active=True,
         )
         notify_users(
             directors, kind=Notification.Kind.ACCOUNT_APPROVAL,
@@ -55,7 +55,7 @@ def _can_manage_target(manager, target):
     if manager.is_super_admin:
         return True
     if manager.is_director:
-        if target.division_id != manager.division_id or target.role_code in {"super-admin", "director"}:
+        if target.division_id != manager.division_id or target.is_super_admin or target.is_director:
             return False
         if target.role_code == "senior-it-consultant" and manager.division.code != "IT":
             return False
@@ -73,7 +73,9 @@ def user_list(request):
         approval_request__status=AccountApprovalRequest.Status.PENDING,
     ).order_by("division__code", "first_name")
     if request.user.is_director:
-        users = users.filter(division=request.user.division).exclude(role__code__in=["super-admin", "director"])
+        users = users.filter(division=request.user.division).exclude(
+            role__is_division_director=True,
+        ).exclude(role__code="super-admin")
     elif request.user.is_senior_it:
         users = users.filter(division__code="IT", role__code="officer")
     q = request.GET.get("q", "").strip()

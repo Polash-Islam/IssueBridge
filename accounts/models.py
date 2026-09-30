@@ -20,6 +20,10 @@ class Role(models.Model):
     scope = models.CharField(max_length=12, choices=Scope.choices, default=Scope.OWN)
     permissions = models.ManyToManyField(Permission, blank=True)
     is_system = models.BooleanField(default=False)
+    is_division_director = models.BooleanField(
+        default=False,
+        help_text="Users with this role act as the head/director of their assigned division.",
+    )
 
     class Meta:
         ordering = ["name"]
@@ -62,7 +66,7 @@ class User(AbstractUser):
 
     @property
     def is_director(self):
-        return self.role_code == "director"
+        return bool(self.role_id and self.role.is_division_director)
 
     @property
     def is_senior_it(self):
@@ -77,8 +81,6 @@ class User(AbstractUser):
         return self.is_super_admin or self.is_director or self.is_senior_it
 
     def save(self, *args, **kwargs):
-        if self.role_id and self.role_code == "director":
-            self.designation = "Executive Director"
         super().save(*args, **kwargs)
 
     def __str__(self):

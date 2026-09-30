@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 from .models import Role, User
 
 
@@ -27,7 +28,7 @@ class OfficerRegistrationForm(UserCreationForm):
     def clean_division(self):
         division = self.cleaned_data["division"]
         if not User.objects.filter(
-            division=division, role__code="director", is_active=True,
+            division=division, role__is_division_director=True, is_active=True,
         ).exists():
             raise forms.ValidationError("This division does not currently have an active Director to approve the account.")
         return division
@@ -39,7 +40,7 @@ class OfficerRegistrationForm(UserCreationForm):
         user.role = Role.objects.get(code="officer")
         user.is_active = False
         director = User.objects.filter(
-            division=self.cleaned_data["division"], role__code="director", is_active=True,
+            division=self.cleaned_data["division"], role__is_division_director=True, is_active=True,
         ).order_by("pk").first()
         user.supervisor = director
         if commit:
@@ -64,10 +65,10 @@ class UserCreateForm(UserCreationForm):
         if manager and manager.is_director and manager.division:
             self.fields["division"].queryset = self.fields["division"].queryset.filter(pk=manager.division_id)
             self.fields["division"].initial = manager.division
-            excluded = ["super-admin", "director"]
+            excluded = Q(code="super-admin") | Q(is_division_director=True)
             if manager.division.code != "IT":
-                excluded.append("senior-it-consultant")
-            self.fields["role"].queryset = Role.objects.exclude(code__in=excluded)
+                excluded |= Q(code="senior-it-consultant")
+            self.fields["role"].queryset = Role.objects.exclude(excluded)
         elif manager and manager.is_senior_it:
             self.fields["division"].queryset = self.fields["division"].queryset.filter(code="IT")
             self.fields["division"].initial = manager.division
@@ -85,10 +86,11 @@ class UserCreateForm(UserCreationForm):
     def clean_role(self):
         role = self.cleaned_data.get("role")
         if self.manager and self.manager.is_director and role:
-            disallowed = {"super-admin", "director"}
-            if self.manager.division.code != "IT":
-                disallowed.add("senior-it-consultant")
-            if role.code in disallowed:
+            if (
+                role.code == "super-admin"
+                or role.is_division_director
+                or (role.code == "senior-it-consultant" and self.manager.division.code != "IT")
+            ):
                 raise forms.ValidationError("Directors can only assign permitted subordinate roles.")
         if self.manager and self.manager.is_senior_it and role and role.code != "officer":
             raise forms.ValidationError("Senior IT Consultants can only create Officer-role accounts.")
@@ -100,8 +102,6 @@ class UserCreateForm(UserCreationForm):
         user.created_by = self.manager
         if self.manager and (self.manager.is_director or self.manager.is_senior_it):
             user.supervisor = self.manager
-        if user.role and user.role.code == "director":
-            user.designation = "Executive Director"
         if commit:
             user.save()
         return user
@@ -126,10 +126,10 @@ class UserEditForm(forms.ModelForm):
             field.widget.attrs.setdefault("class", "form-control")
         if manager and manager.is_director:
             self.fields["division"].queryset = self.fields["division"].queryset.filter(pk=manager.division_id)
-            excluded = ["super-admin", "director"]
+            excluded = Q(code="super-admin") | Q(is_division_director=True)
             if manager.division.code != "IT":
-                excluded.append("senior-it-consultant")
-            self.fields["role"].queryset = Role.objects.exclude(code__in=excluded)
+                excluded |= Q(code="senior-it-consultant")
+            self.fields["role"].queryset = Role.objects.exclude(excluded)
         elif manager and manager.is_senior_it:
             self.fields["division"].queryset = self.fields["division"].queryset.filter(code="IT")
             self.fields["role"].queryset = Role.objects.filter(code="officer")
@@ -140,7 +140,11 @@ class UserEditForm(forms.ModelForm):
         if self.manager and self.manager.is_director:
             if division != self.manager.division:
                 self.add_error("division", "You can only manage users in your division.")
-            if role and (role.code in {"super-admin", "director"} or (role.code == "senior-it-consultant" and self.manager.division.code != "IT")):
+            if role and (
+                role.code == "super-admin"
+                or role.is_division_director
+                or (role.code == "senior-it-consultant" and self.manager.division.code != "IT")
+            ):
                 self.add_error("role", "That role is outside your management scope.")
         if self.manager and self.manager.is_senior_it:
             if getattr(division, "code", None) != "IT" or not role or role.code != "officer":
@@ -156,8 +160,6 @@ class UserEditForm(forms.ModelForm):
     def save(self, commit=True):
         user = super().save(commit=False)
         user.username = user.email.lower()
-        if user.role and user.role.code == "director":
-            user.designation = "Executive Director"
         if self.cleaned_data.get("new_password1"):
             user.set_password(self.cleaned_data["new_password1"])
         if commit:
