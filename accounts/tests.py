@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.core.management import call_command
+from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -9,6 +10,57 @@ from communications.models import Notification
 from core.models import Division
 from .models import AccountApprovalRequest, Role, User
 from .services import purge_expired_account_requests
+
+
+class RoleAdminTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(
+            username="role-admin", email="role-admin@example.com", password="TestPassword2026!",
+        )
+        cls.division = Division.objects.create(name="Information Technology", code="IT")
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_admin_requires_division_when_creating_role(self):
+        response = self.client.post(reverse("admin:accounts_role_add"), {
+            "name": "IT Support", "code": "it-support", "scope": Role.Scope.OWN,
+            "_save": "Save",
+        })
+        self.assertFormError(response.context["adminform"].form, "division", "This field is required.")
+        self.assertFalse(Role.objects.filter(code="it-support").exists())
+
+    def test_admin_creates_role_under_selected_division(self):
+        response = self.client.post(reverse("admin:accounts_role_add"), {
+            "name": "IT Support", "code": "it-support", "division": self.division.pk,
+            "scope": Role.Scope.OWN, "_save": "Save",
+        })
+        self.assertRedirects(response, reverse("admin:accounts_role_changelist"))
+        role = Role.objects.get(code="it-support")
+        self.assertEqual(role.division, self.division)
+        with self.assertRaises(ProtectedError):
+            self.division.delete()
+
+    def test_admin_can_filter_roles_by_division(self):
+        role = Role.objects.create(name="IT Support", code="it-support", division=self.division)
+        other_division = Division.objects.create(name="Audit Practice Review", code="APR")
+        Role.objects.create(name="APR Support", code="apr-support", division=other_division)
+        response = self.client.get(reverse("admin:accounts_role_changelist"), {
+            "division__id__exact": self.division.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["cl"].result_list), [role])
+
+    def test_existing_shared_role_can_be_assigned_to_division(self):
+        role = Role.objects.create(name="Legacy Support", code="legacy-support")
+        response = self.client.post(reverse("admin:accounts_role_change", args=[role.pk]), {
+            "name": role.name, "code": role.code, "division": self.division.pk,
+            "scope": role.scope, "_save": "Save",
+        })
+        self.assertRedirects(response, reverse("admin:accounts_role_changelist"))
+        role.refresh_from_db()
+        self.assertEqual(role.division, self.division)
 
 
 class AccountManagementTests(TestCase):
@@ -86,6 +138,9 @@ class OfficerSelfRegistrationTests(TestCase):
     def setUpTestData(cls):
         call_command("seed_demo", with_demo_data=True, verbosity=0)
         cls.apr = Division.objects.get(code="APR")
+        cls.designation_role = Role.objects.create(
+            name="APR Registration Officer", code="apr-registration-officer", division=cls.apr,
+        )
         cls.apr_director = User.objects.get(email="apr.director@frc.gov.bd")
         cls.frm_director = User.objects.create_user(
             username="frm.director.test@frc.gov.bd", email="frm.director.test@frc.gov.bd",
@@ -97,7 +152,7 @@ class OfficerSelfRegistrationTests(TestCase):
         data = {
             "first_name": "New", "last_name": "APR Officer", "employee_id": "SELF-1001",
             "email": "self.registered@frc.gov.bd", "mobile": "01700000001",
-            "designation": "Officer", "division": self.apr.pk,
+            "designation": self.designation_role.name, "division": self.apr.pk,
             "password1": "StrongSelfPass2026!", "password2": "StrongSelfPass2026!",
         }
         data.update(overrides)
@@ -109,6 +164,42 @@ class OfficerSelfRegistrationTests(TestCase):
         user = User.objects.get(email="self.registered@frc.gov.bd")
         return user, user.approval_request
 
+    def test_registration_orders_division_before_designation(self):
+        response = self.client.get(reverse("register"))
+        fields = list(response.context["form"].fields)
+        self.assertEqual(fields[fields.index("mobile") + 1:fields.index("mobile") + 3],
+                         ["division", "designation"])
+        self.assertContains(response, 'id="registration-designation-roles"')
+        self.assertContains(response, 'js/registration.js')
+
+    def test_registration_rejects_designation_from_another_division(self):
+        other_role = Role.objects.create(
+            name="FRM Registration Officer", code="frm-registration-officer",
+            division=Division.objects.get(code="FRM"),
+        )
+        response = self.client.post(reverse("register"), self.registration_data(designation=other_role.name))
+        self.assertIn("designation", response.context["form"].errors)
+        self.assertFalse(User.objects.filter(email="self.registered@frc.gov.bd").exists())
+
+    def test_registration_rejects_unassigned_role_and_free_text(self):
+        for designation in ["Officer", "Arbitrary designation", ""]:
+            with self.subTest(designation=designation):
+                response = self.client.post(reverse("register"), self.registration_data(designation=designation))
+                self.assertIn("designation", response.context["form"].errors)
+                self.assertFalse(User.objects.filter(email="self.registered@frc.gov.bd").exists())
+
+    def test_registration_preserves_designation_when_other_field_is_invalid(self):
+        response = self.client.post(reverse("register"), self.registration_data(password2="mismatch"))
+        form = response.context["form"]
+        self.assertIn("password2", form.errors)
+        self.assertNotIn("designation", form.errors)
+        self.assertEqual(form["designation"].value(), self.designation_role.name)
+
+    def test_registration_requires_division(self):
+        response = self.client.post(reverse("register"), self.registration_data(division=""))
+        self.assertIn("division", response.context["form"].errors)
+        self.assertFalse(User.objects.filter(email="self.registered@frc.gov.bd").exists())
+
     def test_login_page_uses_frc_logo_and_registration_link(self):
         response = self.client.get(reverse("login"))
         self.assertContains(response, "/media/FRC_Logo.png")
@@ -119,6 +210,7 @@ class OfficerSelfRegistrationTests(TestCase):
         user, approval = self.create_pending_account()
         self.assertFalse(user.is_active)
         self.assertEqual(user.role_code, "officer")
+        self.assertEqual(user.designation, self.designation_role.name)
         self.assertEqual(approval.division, self.apr)
         approval_window = approval.expires_at - approval.requested_at
         self.assertGreaterEqual(approval_window, timedelta(hours=23, minutes=59))

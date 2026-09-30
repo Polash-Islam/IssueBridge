@@ -133,7 +133,11 @@ def kanban_move(request):
 def ticket_create(request):
     form = TicketCreateForm(request.POST or None, request.FILES or None, user=request.user)
     if request.method == "POST" and form.is_valid():
-        ticket = create_ticket(form=form, user=request.user, files=form.cleaned_data["attachments"], request=request)
+        try:
+            ticket = create_ticket(form=form, user=request.user, files=form.cleaned_data["attachments"], request=request)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+            return render(request, "tickets/ticket_form.html", {"form": form})
         if ticket.current_assignee:
             messages.success(request, f"{ticket.ticket_number} was created and assigned to {ticket.current_assignee.full_name}.")
         else:
@@ -169,11 +173,16 @@ def ticket_detail(request, number):
     comments = ticket.comments.select_related("author", "author__division").prefetch_related("attachments")
     if not can_view_internal_comments(request.user):
         comments = comments.filter(visibility="PUBLIC")
+    comments = list(comments)
+    comments_by_id = {comment.pk: comment for comment in comments}
+    history = list(ticket.history.select_related("actor")[:50])
+    for event in history:
+        event.related_comment = comments_by_id.get(event.new_value.get("comment_id"))
     available_statuses = _available_statuses(request.user, ticket)
     context = {
         "ticket": ticket,
         "comments": comments,
-        "history": ticket.history.select_related("actor")[:50],
+        "history": history,
         "comment_form": CommentForm(user=request.user),
         "review_form": ReviewForm(),
         "assignment_form": AssignmentForm(),
@@ -221,7 +230,11 @@ def comment_add(request, number):
                 ticket=ticket, comment=comment, file=uploaded, original_name=uploaded.name,
                 content_type=getattr(uploaded, "content_type", ""), file_size=uploaded.size, uploaded_by=request.user,
             )
-        record_history(ticket, request.user, "COMMENT_ADDED", f"{form.cleaned_data['visibility'].title()} comment added", request)
+        record_history(
+            ticket, request.user, "COMMENT_ADDED",
+            f"{form.cleaned_data['visibility'].title()} comment added", request,
+            new={"comment_id": comment.pk},
+        )
         from communications.models import Notification
         from communications.services import notify_users
         recipients = [ticket.current_assignee, ticket.reviewed_by]

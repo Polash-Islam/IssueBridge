@@ -25,4 +25,6 @@
     <footer class="auth-footer"><span>© {% now "Y" %} Financial Reporting Council</span><span>Government of Bangladesh · Dhaka</span></footer>
   </section>
 </main>
+{{ form.designation_roles|json_script:"registration-designation-roles" }}
+<script src="{% static 'js/registration.js' %}" defer></script>
 {% endblock %}

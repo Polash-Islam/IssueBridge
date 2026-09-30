@@ -1,0 +1,22 @@
+<dialog id="activityDialog" class="activity-dialog" aria-labelledby="activityDialogTitle">
+  <header class="activity-dialog-header">
+    <div><small>{{ ticket.ticket_number }}</small><h2 id="activityDialogTitle">Details</h2><p>{{ ticket.title }}</p></div>
+    <form method="dialog"><button type="submit" class="activity-close" aria-label="Close activity details" autofocus>&times;</button></form>
+  </header>
+  <div class="activity-dialog-content">
+    {% for comment in comments %}
+    <article id="comment-detail-{{ comment.pk }}" class="activity-comment activity-detail" hidden>
+      <div class="activity-comment-header"><span class="avatar">{{ comment.author.first_name|first }}{{ comment.author.last_name|first }}</span><div><strong>{{ comment.author.full_name }}</strong><time>{{ comment.created_at|date:"d M Y, g:i A" }}</time></div>{% if comment.visibility == 'INTERNAL' %}<span class="activity-private">Internal IT</span>{% endif %}</div>
+      <div class="activity-comment-body">{{ comment.body|linebreaks }}</div>
+      {% if comment.attachments.all %}<div class="comment-files">{% for file in comment.attachments.all %}<a href="{% url 'attachment_download' file.pk %}" target="_blank" rel="noopener">{{ file.original_name }}</a>{% endfor %}</div>{% endif %}
+    </article>
+    {% endfor %}
+    {% for event in history %}
+    <article id="event-detail-{{ event.pk }}" class="activity-comment activity-detail" hidden>
+      <div class="activity-comment-header"><div><strong>{{ event.actor.full_name|default:"System" }}</strong><time>{{ event.created_at|date:"d M Y, g:i A" }}</time></div></div>
+      <div class="activity-comment-body">{{ event.description|linebreaks }}</div>
+      {% if event.related_comment %}<div class="activity-comment-body">{{ event.related_comment.body|linebreaks }}</div>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+</dialog>

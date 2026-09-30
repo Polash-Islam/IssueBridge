@@ -15,6 +15,11 @@ class MeetingAdmin(admin.ModelAdmin):
     inlines = (ParticipantInline,)
 
 
-admin.site.register(MeetingType)
+@admin.register(MeetingType)
+class MeetingTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "is_active")
+    prepopulated_fields = {"code": ("name",)}
+
+
 admin.site.register(MeetingHistory)
 admin.site.register(Notification)

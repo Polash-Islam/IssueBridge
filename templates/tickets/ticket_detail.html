@@ -4,7 +4,7 @@
 <div class="ticket-topline"><a href="{% url 'ticket_list' %}">Tickets</a><span>/</span><strong>{{ ticket.ticket_number }}</strong></div>
 <div class="ticket-heading">
   <div><div class="ticket-id-row"><span class="division-chip">{{ ticket.requesting_division.code }}</span><span>{{ ticket.ticket_number }}</span>{% if ticket.is_overdue %}<span class="overdue-flag">Overdue</span>{% endif %}</div><h1>{{ ticket.title }}</h1><p>Reported by <strong>{{ ticket.requester.full_name }}</strong> · {{ ticket.created_at|date:"d M Y, g:i A" }}</p></div>
-  <div class="ticket-heading-actions"><span class="status-badge large" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span><button class="icon-button">•••</button></div>
+  {% comment %} <div class="ticket-heading-actions"><span class="status-badge large" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span><button class="icon-button">•••</button></div> {% endcomment %}
 </div>
 
 <div class="ticket-layout">
@@ -28,13 +28,13 @@
 
     <section class="panel ticket-section" id="discussion">
       <div class="ticket-section-head"><div><h2>Discussion</h2><p>Updates remain attached to this ticket’s record.</p></div></div>
-      <div class="comment-list">{% for comment in comments %}<article class="comment {% if comment.visibility == 'INTERNAL' %}internal-comment{% endif %}"><span class="avatar">{{ comment.author.first_name|first }}{{ comment.author.last_name|first }}</span><div><div class="comment-head"><strong>{{ comment.author.full_name }}</strong><span>{% if comment.author.designation %}{{ comment.author.designation }}{% elif comment.author.division %}{{ comment.author.division.code }}{% endif %}</span><time>{{ comment.created_at|timesince }} ago</time>{% if comment.visibility == 'INTERNAL' %}<em>🔒 Internal IT</em>{% endif %}</div><div class="comment-body">{{ comment.body|linebreaks }}</div>{% if comment.attachments.exists %}<div class="comment-files">{% for file in comment.attachments.all %}<a href="{% url 'attachment_download' file.pk %}" target="_blank">📎 {{ file.original_name }}</a>{% endfor %}</div>{% endif %}</div></article>{% empty %}<div class="empty-mini">No comments yet. Start the discussion below.</div>{% endfor %}</div>
+      <div class="comment-list">{% for comment in comments %}<article tabindex="0" role="button" aria-haspopup="dialog" data-activity-target="comment-detail-{{ comment.pk }}" class="comment {% if comment.visibility == 'INTERNAL' %}internal-comment{% endif %}"><span class="avatar">{{ comment.author.first_name|first }}{{ comment.author.last_name|first }}</span><div><div class="comment-head"><strong>{{ comment.author.full_name }}</strong><span>{% if comment.author.designation %}{{ comment.author.designation }}{% elif comment.author.division %}{{ comment.author.division.code }}{% endif %}</span><time>{{ comment.created_at|timesince }} ago</time>{% if comment.visibility == 'INTERNAL' %}<em>🔒 Internal IT</em>{% endif %}</div><div class="comment-body">{{ comment.body|linebreaks }}</div>{% if comment.attachments.exists %}<div class="comment-files">{% for file in comment.attachments.all %}<a href="{% url 'attachment_download' file.pk %}" target="_blank">📎 {{ file.original_name }}</a>{% endfor %}</div>{% endif %}</div></article>{% empty %}<div class="empty-mini">No comments yet. Start the discussion below.</div>{% endfor %}</div>
       <form class="comment-composer" action="{% url 'comment_add' ticket.ticket_number %}" method="post" enctype="multipart/form-data">{% csrf_token %}<span class="avatar">{{ user.first_name|first }}{{ user.last_name|first }}</span><div class="composer-body">{{ comment_form.body }}<div class="composer-actions"><div>{{ comment_form.visibility }}<label class="attach-button">📎 Attach{{ comment_form.attachments }}</label></div><button class="btn btn-primary btn-small">Post comment</button></div></div></form>
     </section>
 
     <section class="panel ticket-section" id="activity">
-      <div class="ticket-section-head"><div><h2>Activity history</h2><p>An immutable record of material actions.</p></div></div>
-      <div class="timeline">{% for event in history %}<div class="timeline-event"><i></i><div><p>{{ event.description }}</p><span>{% if event.actor %}{{ event.actor.full_name }} · {% endif %}{{ event.created_at|date:"d M Y, g:i A" }}</span></div><em>{{ event.action|cut:"_"|title }}</em></div>{% empty %}<div class="empty-mini">No activity recorded.</div>{% endfor %}</div>
+      <div class="ticket-section-head"><div><h2>Activity history</h2><p>Click an entry to view its details.</p></div></div>
+      <div class="timeline">{% for event in history %}<div class="timeline-event" tabindex="0" role="button" aria-haspopup="dialog" data-activity-target="event-detail-{{ event.pk }}"><i></i><div><p>{{ event.description }}</p><span>{% if event.actor %}{{ event.actor.full_name }} · {% endif %}{{ event.created_at|date:"d M Y, g:i A" }}</span></div><em>{{ event.action|cut:"_"|title }}</em></div>{% empty %}<div class="empty-mini">No activity recorded.</div>{% endfor %}</div>
     </section>
   </div>
 
@@ -55,4 +55,5 @@
     </dl></section>
   </aside>
 </div>
+{% include "tickets/_activity_dialog.html" %}
 {% endblock %}

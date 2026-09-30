@@ -28,11 +28,17 @@ def create_ticket(*, form, user, files, request=None):
     division = form.cleaned_data["requesting_division"]
     requester = form.cleaned_data.get("requested_for") or user
     assigned_to = form.cleaned_data.get("assign_to")
+    status_code = "assigned" if assigned_to else "new"
+    try:
+        status = WorkflowStatus.objects.get(code=status_code, is_active=True)
+    except WorkflowStatus.DoesNotExist as exc:
+        raise ValidationError(
+            "Ticket workflow is not configured. Please contact an administrator to restore the workflow statuses."
+        ) from exc
     year = timezone.localdate().year
     sequence, _ = TicketNumberSequence.objects.select_for_update().get_or_create(division=division, year=year)
     sequence.last_number += 1
     sequence.save(update_fields=["last_number"])
-    status = WorkflowStatus.objects.get(code="assigned" if assigned_to else "new")
     ticket = form.save(commit=False)
     ticket.ticket_number = f"{division.code}-{year}-{sequence.last_number:04d}"
     ticket.requester = requester

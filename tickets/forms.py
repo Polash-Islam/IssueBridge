@@ -54,7 +54,7 @@ class TicketCreateForm(forms.ModelForm):
         model = Ticket
         fields = (
             "title", "description", "requesting_division", "product", "category", "priority",
-            "problem_identified_at", "module_page", "expected_behavior", "actual_behavior",
+            "problem_identified_at", "expected_behavior", "actual_behavior",
             "browser_device", "additional_notes", "parent",
         )
         widgets = {

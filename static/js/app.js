@@ -1,4 +1,35 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const activityDialog = document.querySelector("#activityDialog");
+  let activityTrigger;
+  if (activityDialog) {
+    document.querySelectorAll('[data-activity-target]').forEach(trigger => {
+      const open = () => {
+        activityDialog.querySelectorAll('.activity-detail').forEach(detail => {
+          detail.hidden = detail.id !== trigger.dataset.activityTarget;
+        });
+        activityTrigger = trigger;
+        if (!activityDialog.open) activityDialog.showModal();
+        activityDialog.scrollTop = 0;
+      };
+      trigger.addEventListener('click', event => {
+        if (!event.target.closest('a')) open();
+      });
+      trigger.addEventListener('keydown', event => {
+        if (event.target === trigger && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          open();
+        }
+      });
+    });
+    activityDialog.addEventListener("click", (event) => {
+      const bounds = activityDialog.getBoundingClientRect();
+      if (event.target === activityDialog && (
+        event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom
+      )) activityDialog.close();
+    });
+    activityDialog.addEventListener("close", () => activityTrigger?.focus());
+  }
   const sidebar = document.querySelector("#sidebar");
   document.querySelector("#menuToggle")?.addEventListener("click", () => sidebar?.classList.toggle("open"));
 
@@ -19,6 +50,19 @@ document.addEventListener("DOMContentLoaded", () => {
         item.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
         preview.appendChild(item);
       });
+      if (uploadInput.files.length) {
+        const clearButton = document.createElement("button");
+        clearButton.type = "button";
+        clearButton.className = "btn btn-secondary btn-small";
+        clearButton.textContent = "Clear";
+        clearButton.setAttribute("aria-label", "Clear selected attachments");
+        clearButton.addEventListener("click", () => {
+          uploadInput.value = "";
+          uploadInput.dispatchEvent(new Event("change", { bubbles: true }));
+          uploadInput.focus();
+        });
+        preview.appendChild(clearButton);
+      }
     });
   }
 

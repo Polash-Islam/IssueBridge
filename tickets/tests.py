@@ -173,6 +173,25 @@ class PageSmokeTests(TestCase):
             payload["assign_to"] = assign_to.pk
         return payload
 
+    def test_missing_intake_status_shows_form_error(self):
+        for code in ["new", "assigned"]:
+            with self.subTest(code=code):
+                status = WorkflowStatus.objects.get(code=code)
+                status.code = f"missing-{code}"
+                status.save(update_fields=["code"])
+                requester = User.objects.get(email="apr.officer@frc.gov.bd")
+                self.client.force_login(self.user if code == "assigned" else requester)
+                before = Ticket.objects.count()
+                response = self.client.post(reverse("ticket_create"), self._ticket_payload(
+                    requester=requester, title="Missing workflow configuration",
+                    requested_for=requester if code == "assigned" else None,
+                    assign_to=requester if code == "assigned" else None,
+                ))
+                self.assertContains(response, "Ticket workflow is not configured")
+                self.assertEqual(Ticket.objects.count(), before)
+                status.code = code
+                status.save(update_fields=["code"])
+
     def test_senior_it_can_create_ticket_for_any_active_user(self):
         frm_user = User.objects.get(email="frm.officer@frc.gov.bd")
         response = self.client.get(reverse("ticket_create"))

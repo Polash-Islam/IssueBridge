@@ -6,16 +6,27 @@ from .models import Role, User
 
 
 class OfficerRegistrationForm(UserCreationForm):
+    designation = forms.ChoiceField(choices=(), required=True)
+
     class Meta(UserCreationForm.Meta):
         model = User
         fields = (
             "first_name", "last_name", "employee_id", "email", "mobile",
-            "designation", "division", "profile_photo",
+            "division", "designation", "profile_photo",
         )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["division"].queryset = self.fields["division"].queryset.filter(is_active=True)
+        self.fields["division"].required = True
+        self.designation_roles = list(
+            Role.objects.filter(division__is_active=True).values("name", "division_id")
+        )
+        division_id = self.data.get(self.add_prefix("division")) if self.is_bound else self.initial.get("division")
+        self.fields["designation"].choices = [("", "Select a designation")] + [
+            (role["name"], role["name"]) for role in self.designation_roles
+            if str(role["division_id"]) == str(division_id)
+        ]
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 

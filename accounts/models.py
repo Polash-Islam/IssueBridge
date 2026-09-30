@@ -15,6 +15,10 @@ class Role(models.Model):
         OWN = "OWN", "Own records"
 
     name = models.CharField(max_length=80, unique=True)
+    division = models.ForeignKey(
+        "core.Division", on_delete=models.PROTECT, related_name="roles", null=True,
+        help_text="Create a division first, then select the division this role belongs to.",
+    )
     code = models.SlugField(max_length=50, unique=True)
     description = models.TextField(blank=True)
     scope = models.CharField(max_length=12, choices=Scope.choices, default=Scope.OWN)

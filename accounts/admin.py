@@ -1,13 +1,27 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.urls import reverse
+from django.utils.html import format_html
 from .models import AccountApprovalRequest, Role, User
 
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "scope", "is_division_director", "is_system")
-    list_filter = ("scope", "is_division_director", "is_system")
-    search_fields = ("name", "code")
+    list_display = ("name", "division", "code", "scope", "is_division_director", "is_system", "edit_link")
+    list_filter = ("division", "scope", "is_division_director", "is_system")
+    search_fields = ("name", "code", "division__name", "division__code")
+    list_select_related = ("division",)
+    prepopulated_fields = {"code": ("name",)}
+    fieldsets = (
+        (None, {"fields": ("name", "division", "code", "description")}),
+        ("Access settings", {"fields": ("scope", "is_division_director", "permissions", "is_system")}),
+    )
+    filter_horizontal = ("permissions",)
+
+    @admin.display(description="Edit")
+    def edit_link(self, obj):
+        url = reverse("admin:accounts_role_change", args=[obj.pk], current_app=self.admin_site.name)
+        return format_html('<a class="button" href="{}">Edit</a>', url)
 
 
 @admin.register(User)

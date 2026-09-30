@@ -8,6 +8,7 @@ from .models import (
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
+    prepopulated_fields = {"code": ("name",)}
     list_display = ("name", "division", "is_active")
     list_filter = ("division", "is_active")
     search_fields = ("name", "code")
@@ -15,17 +16,20 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(TicketCategory)
 class TicketCategoryAdmin(admin.ModelAdmin):
+    prepopulated_fields = {"code": ("name",)}
     list_display = ("name", "code", "is_active")
     list_filter = ("is_active",)
 
 
 @admin.register(TicketPriority)
 class TicketPriorityAdmin(admin.ModelAdmin):
+    prepopulated_fields = {"code": ("name",)}
     list_display = ("name", "rank", "color", "is_active")
 
 
 @admin.register(WorkflowStatus)
 class WorkflowStatusAdmin(admin.ModelAdmin):
+    prepopulated_fields = {"code": ("name",)}
     list_display = ("name", "kind", "sort_order", "color", "is_active")
 
 

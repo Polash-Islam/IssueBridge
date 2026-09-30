@@ -3,6 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="IssueBridge · Financial Reporting Council internal management portal">
   <title>{% block title %}IssueBridge{% endblock %}</title>
@@ -24,13 +25,10 @@
       <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
         <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>Dashboard
       </a>
-      <a href="{% url 'ticket_list' %}?scope=assigned">
-        <svg viewBox="0 0 24 24"><path d="M9 11 12 14 22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>My Tasks{% if nav_my_tasks_count %}<span class="nav-count attention">{{ nav_my_tasks_count }}</span>{% endif %}
+      <a href="{% url 'ticket_list' %}" class="{% if 'ticket' in request.resolver_match.url_name|default:'' and request.GET.scope != 'verification' %}active{% endif %}">
+        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 0 0 4v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 0 0-4V5Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg>My Tickets
       </a>
-      <a href="{% url 'ticket_list' %}" class="{% if 'ticket' in request.resolver_match.url_name|default:'' %}active{% endif %}">
-        <svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4a2 2 0 0 0 0 4v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 0 0-4V5Z"/><path d="M13 5v2M13 11v2M13 17v2"/></svg>Tickets
-      </a>
-      <a href="{% url 'ticket_list' %}?scope=verification">
+      <a href="{% url 'ticket_list' %}?scope=verification" class="{% if request.resolver_match.url_name == 'ticket_list' and request.GET.scope == 'verification' %}active{% endif %}">
         <svg viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 22C7 20 4 16 4 10V5l8-3 8 3v5c0 6-3 10-8 12Z"/></svg>Verification{% if nav_verification_count %}<span class="nav-count attention">{{ nav_verification_count }}</span>{% endif %}
       </a>
       <a href="{% url 'notification_list' %}" class="{% if 'notification' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>Notifications{% if unread_notification_count %}<span class="nav-count attention">{{ unread_notification_count }}</span>{% endif %}</a>
