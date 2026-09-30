@@ -123,6 +123,31 @@ class PageSmokeTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
+    def test_ticket_comment_author_label_handles_missing_division(self):
+        ticket = Ticket.objects.first()
+        author = User.objects.create_user(
+            username="comment-author", email="comment-author@example.com",
+            first_name="Comment", last_name="Author",
+        )
+        ticket.comments.create(author=author, body="Comment from an optional profile.")
+        division = self.user.division
+        for designation, author_division, expected in [
+            ("", None, ""),
+            ("Support specialist", None, "Support specialist"),
+            ("", division, division.code),
+            ("Support specialist", division, "Support specialist"),
+        ]:
+            with self.subTest(designation=designation, division=author_division):
+                author.designation = designation
+                author.division = author_division
+                author.save(update_fields=["designation", "division"])
+                response = self.client.get(ticket.get_absolute_url())
+                self.assertContains(
+                    response,
+                    f"<strong>Comment Author</strong><span>{expected}</span>",
+                    html=True,
+                )
+
     def test_dashboard_is_full_for_senior_it_and_focused_for_officer(self):
         response = self.client.get(reverse("dashboard"))
         self.assertContains(response, "Division workload")
