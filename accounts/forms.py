@@ -2,11 +2,14 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
+from core.models import Division
 from .models import Role, User
 
 
 class OfficerRegistrationForm(UserCreationForm):
     designation = forms.ChoiceField(choices=(), required=True)
+    DEFAULT_DESIGNATION = "Admin Officer"
+    IT_DESIGNATIONS = ("Junior IT Consultant", "Senior IT Consultant", "Intern")
 
     class Meta(UserCreationForm.Meta):
         model = User
@@ -19,13 +22,22 @@ class OfficerRegistrationForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         self.fields["division"].queryset = self.fields["division"].queryset.filter(is_active=True)
         self.fields["division"].required = True
-        self.designation_roles = list(
-            Role.objects.filter(division__is_active=True).values("name", "division_id")
+        it_division_ids = list(
+            Division.objects.filter(is_active=True).filter(
+                Q(code__iexact="IT") | Q(name__icontains="Information Technology")
+            ).values_list("pk", flat=True)
+        )
+        self.designation_roles = [{"name": self.DEFAULT_DESIGNATION, "division_id": None}]
+        self.designation_roles.extend(
+            {"name": name, "division_id": division_id}
+            for division_id in it_division_ids
+            for name in self.IT_DESIGNATIONS
         )
         division_id = self.data.get(self.add_prefix("division")) if self.is_bound else self.initial.get("division")
+        division_id = getattr(division_id, "pk", division_id)
         self.fields["designation"].choices = [("", "Select a designation")] + [
             (role["name"], role["name"]) for role in self.designation_roles
-            if str(role["division_id"]) == str(division_id)
+            if role["division_id"] is None or str(role["division_id"]) == str(division_id)
         ]
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")

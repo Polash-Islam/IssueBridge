@@ -4,6 +4,7 @@
 __pycache__/
 *.py[cod]
 *.sqlite3
+*.dump
 media/*
 !media/FRC_Logo.png
 staticfiles/

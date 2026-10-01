@@ -6,7 +6,9 @@
 
   const roles = JSON.parse(data.textContent);
   function updateDesignations(selected = '') {
-    const matching = roles.filter(role => String(role.division_id) === division.value);
+    const matching = roles.filter(role => (
+      role.division_id === null || String(role.division_id) === division.value
+    ));
     const placeholder = !division.value
       ? 'Select a division first'
       : matching.length ? 'Select a designation' : 'No roles available for this division';
