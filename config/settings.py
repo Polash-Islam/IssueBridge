@@ -9,7 +9,7 @@ load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me-before-production")
 DEBUG = os.getenv("FRC_DEBUG", os.getenv("DEBUG", "1")).lower() in {"1", "true", "yes", "on", "debug"}
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.0.182']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.0.59']
 
 INSTALLED_APPS = [
     "django.contrib.admin",
