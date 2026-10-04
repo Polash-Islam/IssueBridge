@@ -37,7 +37,7 @@ class Command(BaseCommand):
         roles = {}
         for code, name, scope in role_specs:
             roles[code], _ = Role.objects.update_or_create(
-                code=code,
+                code=code, division=None,
                 defaults={
                     "name": name,
                     "scope": scope,

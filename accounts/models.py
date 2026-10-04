@@ -14,12 +14,12 @@ class Role(models.Model):
         DIVISION = "DIVISION", "Division"
         OWN = "OWN", "Own records"
 
-    name = models.CharField(max_length=80, unique=True)
+    name = models.CharField(max_length=80)
     division = models.ForeignKey(
         "core.Division", on_delete=models.PROTECT, related_name="roles", null=True,
         help_text="Create a division first, then select the division this role belongs to.",
     )
-    code = models.SlugField(max_length=50, unique=True)
+    code = models.SlugField(max_length=50)
     description = models.TextField(blank=True)
     scope = models.CharField(max_length=12, choices=Scope.choices, default=Scope.OWN)
     permissions = models.ManyToManyField(Permission, blank=True)
@@ -31,6 +31,18 @@ class Role(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["division", "name"], name="role_division_name_unique"),
+            models.UniqueConstraint(fields=["division", "code"], name="role_division_code_unique"),
+            models.UniqueConstraint(
+                fields=["name"], condition=models.Q(division__isnull=True),
+                name="role_shared_name_unique",
+            ),
+            models.UniqueConstraint(
+                fields=["code"], condition=models.Q(division__isnull=True),
+                name="role_shared_code_unique",
+            ),
+        ]
 
     def __str__(self):
         return self.name
