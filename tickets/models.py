@@ -125,7 +125,6 @@ class Ticket(models.Model):
     related_tickets = models.ManyToManyField("self", blank=True, symmetrical=True)
     watchers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name="watched_tickets")
 
-    problem_identified_at = models.DateTimeField()
     deadline = models.DateTimeField(null=True, blank=True, db_index=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

@@ -1,5 +1,4 @@
 from django import forms
-from django.utils import timezone
 
 from accounts.models import User
 from core.models import Division
@@ -54,7 +53,7 @@ class TicketCreateForm(forms.ModelForm):
         model = Ticket
         fields = (
             "title", "description", "requesting_division", "product", "category", "priority",
-            "problem_identified_at", "expected_behavior", "actual_behavior",
+            "expected_behavior", "actual_behavior",
             "browser_device", "additional_notes", "parent",
         )
         widgets = {
@@ -62,17 +61,17 @@ class TicketCreateForm(forms.ModelForm):
             "expected_behavior": forms.Textarea(attrs={"rows": 3}),
             "actual_behavior": forms.Textarea(attrs={"rows": 3}),
             "additional_notes": forms.Textarea(attrs={"rows": 3}),
-            "problem_identified_at": forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         }
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
-        self.fields["problem_identified_at"].input_formats = ["%Y-%m-%dT%H:%M"]
-        self.fields["problem_identified_at"].initial = timezone.localtime().strftime("%Y-%m-%dT%H:%M")
         self.fields["product"].queryset = Product.objects.filter(is_active=True).select_related("division")
         self.fields["category"].queryset = TicketCategory.objects.filter(is_active=True)
         self.fields["priority"].queryset = TicketPriority.objects.filter(is_active=True)
+        self.fields["expected_behavior"].required = True
+        self.fields["actual_behavior"].required = True
+        self.fields["browser_device"].required = True
         self.fields["requesting_division"].queryset = Division.objects.filter(is_active=True)
         self.fields["parent"].queryset = Ticket.objects.none()
         if user:

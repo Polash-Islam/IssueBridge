@@ -17,11 +17,9 @@ CATEGORY_NAMES = [
 ]
 
 PRIORITIES = [
-    ("low", "Low", 1, "#5f8e73"),
-    ("medium", "Medium", 2, "#3d79b7"),
-    ("high", "High", 3, "#e18432"),
-    ("urgent", "Urgent", 4, "#dd5850"),
-    ("critical", "Critical", 5, "#a93445"),
+    ("moderate", "Moderate", 1, "#3d79b7"),
+    ("high", "High", 2, "#e18432"),
+    ("urgent", "Urgent", 3, "#dd5850"),
 ]
 
 STATUSES = [
@@ -107,10 +105,7 @@ class Command(BaseCommand):
             priority.save()
 
         default_codes = {code for code, *_ in PRIORITIES}
-        custom_priorities = TicketPriority.objects.exclude(code__in=default_codes).order_by("pk")
-        for rank, priority in enumerate(custom_priorities, start=100):
-            priority.rank = rank
-            priority.save(update_fields=["rank"])
+        TicketPriority.objects.exclude(code__in=default_codes).update(is_active=False)
 
         for order, (code, name, kind, color) in enumerate(STATUSES, start=1):
             WorkflowStatus.objects.update_or_create(

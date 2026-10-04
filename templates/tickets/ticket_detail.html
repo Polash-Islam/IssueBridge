@@ -4,7 +4,6 @@
 <div class="ticket-topline"><a href="{% url 'ticket_list' %}">Tickets</a><span>/</span><strong>{{ ticket.ticket_number }}</strong></div>
 <div class="ticket-heading">
   <div><div class="ticket-id-row"><span class="division-chip">{{ ticket.requesting_division.code }}</span><span>{{ ticket.ticket_number }}</span>{% if ticket.is_overdue %}<span class="overdue-flag">Overdue</span>{% endif %}</div><h1>{{ ticket.title }}</h1><p>Reported by <strong>{{ ticket.requester.full_name }}</strong> · {{ ticket.created_at|date:"d M Y, g:i A" }}</p></div>
-  {% comment %} <div class="ticket-heading-actions"><span class="status-badge large" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span><button class="icon-button">•••</button></div> {% endcomment %}
 </div>
 
 <div class="ticket-layout">
@@ -46,12 +45,12 @@
     {% if has_transitions %}<details class="panel action-card"><summary><span><i class="action-icon orange">→</i><strong>Update status</strong></span><b>⌄</b></summary><form action="{% url 'ticket_transition' ticket.ticket_number %}" method="post">{% csrf_token %}<div class="field"><label>Move ticket to</label>{{ transition_form.to_status }}</div><div class="field"><label>Progress note</label>{{ transition_form.comment }}</div><button class="btn btn-primary btn-block">Update status</button></form></details>{% endif %}
 
     <section class="panel details-card"><div class="details-head"><h2>Ticket details</h2></div><dl>
-      <div><dt>Status</dt><dd><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></dd></div>
-      <div><dt>Priority</dt><dd><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></dd></div>
+      <div><dt>Status</dt><dd><span class="status-badge" data-status-color="{{ ticket.status.color }}">{{ ticket.status.name }}</span></dd></div>
+      <div><dt>Priority</dt><dd><span class="priority-badge"><i data-priority-color="{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></dd></div>
       <div><dt>Requester</dt><dd><span class="person"><i>{{ ticket.requester.first_name|first }}{{ ticket.requester.last_name|first }}</i>{{ ticket.requester.full_name }}</span></dd></div>
       <div><dt>Division</dt><dd>{{ ticket.requesting_division.name }}</dd></div><div><dt>Product</dt><dd>{{ ticket.product.name }}</dd></div><div><dt>Category</dt><dd>{{ ticket.category.name }}</dd></div>
       <div><dt>Assigned to</dt><dd>{% if ticket.current_assignee %}<span class="person"><i>{{ ticket.current_assignee.first_name|first }}{{ ticket.current_assignee.last_name|first }}</i>{{ ticket.current_assignee.full_name }}</span>{% else %}<span class="unassigned-pill">Unassigned</span>{% endif %}</dd></div>
-      <div><dt>Identified</dt><dd>{{ ticket.problem_identified_at|date:"d M Y, g:i A" }}</dd></div><div><dt>Created</dt><dd>{{ ticket.created_at|date:"d M Y, g:i A" }}</dd></div><div><dt>Deadline</dt><dd>{% if ticket.deadline %}<span class="deadline {% if ticket.is_overdue %}danger{% endif %}"><strong>{{ ticket.deadline|date:"d M Y, g:i A" }}</strong><small>{{ ticket.due_label }}</small></span>{% else %}Not set{% endif %}</dd></div>
+      <div><dt>Created</dt><dd>{{ ticket.created_at|date:"d M Y, g:i A" }}</dd></div><div><dt>Deadline</dt><dd>{% if ticket.deadline %}<span class="deadline {% if ticket.is_overdue %}danger{% endif %}"><strong>{{ ticket.deadline|date:"d M Y, g:i A" }}</strong><small>{{ ticket.due_label }}</small></span>{% else %}Not set{% endif %}</dd></div>
     </dl></section>
   </aside>
 </div>

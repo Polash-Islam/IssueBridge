@@ -1,4 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("[data-status-color]").forEach((element) => {
+    element.style.setProperty("--badge", element.dataset.statusColor);
+  });
+  document.querySelectorAll("[data-priority-color]").forEach((element) => {
+    element.style.backgroundColor = element.dataset.priorityColor;
+  });
+
   const activityDialog = document.querySelector("#activityDialog");
   let activityTrigger;
   if (activityDialog) {
@@ -32,6 +39,71 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   const sidebar = document.querySelector("#sidebar");
   document.querySelector("#menuToggle")?.addEventListener("click", () => sidebar?.classList.toggle("open"));
+
+  document.querySelectorAll(".field select[multiple]").forEach((select) => {
+    const container = document.createElement("div");
+    container.className = "multi-select";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "form-control multi-select-toggle";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", `${select.id}-options`);
+    const menu = document.createElement("div");
+    menu.className = "multi-select-menu";
+    menu.id = `${select.id}-options`;
+    menu.setAttribute("role", "group");
+    const fieldLabel = select.closest(".field")?.querySelector("label")?.textContent.trim() || "Options";
+    menu.setAttribute("aria-label", fieldLabel);
+
+    [...select.options].forEach((option) => {
+      const label = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = option.selected;
+      checkbox.addEventListener("change", () => {
+        option.selected = checkbox.checked;
+        select.dispatchEvent(new Event("change", {bubbles: true}));
+      });
+      label.append(checkbox, document.createTextNode(option.text));
+      menu.appendChild(label);
+    });
+
+    const updateToggle = () => {
+      const selected = [...select.selectedOptions];
+      toggle.textContent = selected.length === 1 ? selected[0].text :
+        selected.length ? `${selected.length} selected` : "Select participants";
+      toggle.setAttribute("aria-label", `${fieldLabel}: ${selected.length} selected`);
+      menu.querySelectorAll("input[type=checkbox]").forEach((checkbox, index) => {
+        checkbox.checked = select.options[index].selected;
+      });
+    };
+    toggle.addEventListener("click", () => {
+      const isOpen = container.classList.toggle("is-open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    select.addEventListener("change", updateToggle);
+    select.form?.addEventListener("reset", () => window.setTimeout(updateToggle));
+    document.addEventListener("click", (event) => {
+      if (!container.contains(event.target)) {
+        container.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && container.classList.contains("is-open")) {
+        container.classList.remove("is-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.focus();
+      }
+    });
+
+    select.parentNode.insertBefore(container, select);
+    container.append(toggle, menu, select);
+    select.classList.add("multi-select-native");
+    select.setAttribute("aria-hidden", "true");
+    select.tabIndex = -1;
+    updateToggle();
+  });
 
   document.querySelectorAll(".alert button").forEach((button) => {
     button.addEventListener("click", () => button.closest(".alert")?.remove());

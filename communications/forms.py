@@ -10,7 +10,7 @@ from .models import Meeting, MeetingType
 class MeetingForm(forms.ModelForm):
     participants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(), widget=forms.SelectMultiple(attrs={"size": 8}),
-        help_text="Use Ctrl/Cmd to select multiple participants.",
+        help_text="Select one or more participants.",
     )
 
     class Meta:
@@ -52,7 +52,7 @@ class MeetingForm(forms.ModelForm):
 
 class MeetingActionForm(forms.Form):
     action = forms.ChoiceField(choices=[
-        ("accept", "Accept"), ("decline", "Decline"), ("propose", "Propose new time"),
+        ("accept", "Accept"), ("decline", "Decline"),
         ("reschedule", "Reschedule"), ("complete", "Complete"), ("cancel", "Cancel"),
     ])
     proposed_start = forms.DateTimeField(

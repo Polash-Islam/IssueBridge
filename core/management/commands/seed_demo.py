@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from accounts.models import Role, User
@@ -56,9 +57,10 @@ class Command(BaseCommand):
             code = name.lower().replace(" / ", "-").replace(" ", "-")
             categories[name], _ = TicketCategory.objects.update_or_create(code=code, defaults={"name": name, "is_active": True})
 
+        TicketPriority.objects.update(rank=10000 + F("rank"), is_active=False)
         for rank, (code, name, color) in enumerate([
-            ("low", "Low", "#5f8e73"), ("medium", "Medium", "#3d79b7"), ("high", "High", "#e18432"),
-            ("urgent", "Urgent", "#dd5850"), ("critical", "Critical", "#a93445"),
+            ("moderate", "Moderate", "#3d79b7"), ("high", "High", "#e18432"),
+            ("urgent", "Urgent", "#dd5850"),
         ], start=1):
             TicketPriority.objects.update_or_create(code=code, defaults={"name": name, "rank": rank, "color": color, "is_active": True})
 
@@ -162,9 +164,9 @@ class Command(BaseCommand):
         if not Ticket.objects.exists():
             demo_tickets = [
                 ("APR", "APR Software — audit report PDF upload fails", "PDF files above 8 MB fail during final submission. The page returns a generic validation error.", "apr-software", "Bug / Software Error", "high", "in-progress", "it.officer@frc.gov.bd", 2),
-                ("FRM", "Quarterly report totals do not match", "The summary total differs from the underlying schedule for Q3 submissions.", "frm-software", "Report Issue", "critical", "under-review", None, 1),
-                ("APR", "Add reviewer name to exported report", "Please include the assigned reviewer name in the final PDF export.", "apr-software", "Existing Feature Modification", "medium", "ready-for-it-verification", "it.officer@frc.gov.bd", -1),
-                ("ENF", "New user access for case register", "A newly joined officer requires access to the enforcement case register.", "enforcement-systems", "Access / Permission Issue", "medium", "new", None, 5),
+                ("FRM", "Quarterly report totals do not match", "The summary total differs from the underlying schedule for Q3 submissions.", "frm-software", "Report Issue", "urgent", "under-review", None, 1),
+                ("APR", "Add reviewer name to exported report", "Please include the assigned reviewer name in the final PDF export.", "apr-software", "Existing Feature Modification", "moderate", "ready-for-it-verification", "it.officer@frc.gov.bd", -1),
+                ("ENF", "New user access for case register", "A newly joined officer requires access to the enforcement case register.", "enforcement-systems", "Access / Permission Issue", "moderate", "new", None, 5),
             ]
             year = timezone.localdate().year
             for index, (division_code, title, description, product_code, category, priority, status, assignee_email, due_days) in enumerate(demo_tickets, start=1):
@@ -179,7 +181,7 @@ class Command(BaseCommand):
                     requester=requester, identified_by=requester, requesting_division=division, product=products[product_code],
                     category=categories[category], priority=TicketPriority.objects.get(code=priority), status=statuses[status],
                     current_assignee=assignee, reviewed_by=users["consultant@frc.gov.bd"] if status != "new" else None,
-                    problem_identified_at=timezone.now() - timedelta(days=index), deadline=timezone.now() + timedelta(days=due_days),
+                    deadline=timezone.now() + timedelta(days=due_days),
                 )
                 ticket.watchers.add(requester)
                 TicketHistory.objects.create(ticket=ticket, actor=requester, action="TICKET_CREATED", description=f"Ticket created by {requester.full_name}")

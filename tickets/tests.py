@@ -165,7 +165,9 @@ class PageSmokeTests(TestCase):
             "product": (product or Product.objects.filter(division=requester.division, is_active=True).first()).pk,
             "category": TicketCategory.objects.filter(is_active=True).first().pk,
             "priority": TicketPriority.objects.filter(is_active=True).first().pk,
-            "problem_identified_at": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+            "expected_behavior": "The requested workflow should complete successfully.",
+            "actual_behavior": "The workflow does not complete as expected.",
+            "browser_device": "Chrome on Windows",
         }
         if requested_for:
             payload["requested_for"] = requested_for.pk
