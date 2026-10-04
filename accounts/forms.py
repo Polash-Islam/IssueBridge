@@ -48,7 +48,9 @@ class OfficerRegistrationForm(UserCreationForm):
         user = super().save(commit=False)
         user.email = self.cleaned_data["email"]
         user.username = user.email
-        user.role = Role.objects.get(code="officer")
+        user.role = Role.objects.filter(
+            code="officer", division=self.cleaned_data["division"],
+        ).first() or Role.objects.get(code="officer", division__isnull=True)
         user.is_active = False
         director = User.objects.filter(
             division=self.cleaned_data["division"], role__is_division_director=True, is_active=True,

@@ -52,6 +52,27 @@ class RoleAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["cl"].result_list), [role])
 
+    def test_admin_allows_same_role_name_and_code_in_different_divisions(self):
+        Role.objects.create(name="Administrative Officer", code="administrative-officer", division=self.division)
+        other_division = Division.objects.create(name="Financial Reporting Monitoring", code="FRM")
+        response = self.client.post(reverse("admin:accounts_role_add"), {
+            "name": "Administrative Officer", "code": "administrative-officer",
+            "division": other_division.pk, "scope": Role.Scope.OWN, "_save": "Save",
+        })
+        self.assertRedirects(response, reverse("admin:accounts_role_changelist"))
+        self.assertEqual(Role.objects.filter(code="administrative-officer").count(), 2)
+
+    def test_admin_rejects_duplicate_name_or_code_in_same_division(self):
+        Role.objects.create(name="Administrative Officer", code="administrative-officer", division=self.division)
+        for name, code in [("Administrative Officer", "another-code"), ("Another Name", "administrative-officer")]:
+            with self.subTest(name=name, code=code):
+                response = self.client.post(reverse("admin:accounts_role_add"), {
+                    "name": name, "code": code, "division": self.division.pk,
+                    "scope": Role.Scope.OWN, "_save": "Save",
+                })
+                self.assertTrue(response.context["adminform"].form.non_field_errors())
+        self.assertEqual(Role.objects.filter(division=self.division).count(), 1)
+
     def test_existing_shared_role_can_be_assigned_to_division(self):
         role = Role.objects.create(name="Legacy Support", code="legacy-support")
         response = self.client.post(reverse("admin:accounts_role_change", args=[role.pk]), {
@@ -220,6 +241,12 @@ class OfficerSelfRegistrationTests(TestCase):
             recipient=self.apr_director, approval_request=approval,
             kind=Notification.Kind.ACCOUNT_APPROVAL,
         ).exists())
+
+    def test_registration_uses_officer_role_from_selected_division(self):
+        officer = Role.objects.create(name="Officer", code="officer", division=self.apr)
+        Role.objects.create(name="Officer", code="officer", division=Division.objects.get(code="FRM"))
+        user, _ = self.create_pending_account()
+        self.assertEqual(user.role, officer)
 
     def test_custom_named_head_role_is_detected_as_director(self):
         custom_role = Role.objects.create(
