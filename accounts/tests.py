@@ -258,6 +258,28 @@ class OfficerSelfRegistrationTests(TestCase):
         user, _ = self.create_pending_account()
         self.assertEqual(user.role, officer)
 
+    def test_registration_creates_division_officer_role_when_no_fallback_exists(self):
+        division = Division.objects.create(name="New Division", code="NEW")
+        shared_officer = Role.objects.get(code="officer", division__isnull=True)
+        User.objects.filter(role=shared_officer).update(role=Role.objects.get(code="super-admin"))
+        shared_officer.delete()
+        director = User.objects.create_user(
+            username="new.director@frc.gov.bd", email="new.director@frc.gov.bd",
+            password="StrongTestPass2026!", first_name="New", last_name="Director",
+            division=division, role=Role.objects.get(code="director"), is_active=True,
+        )
+        data = self.registration_data(
+            division=division.pk, employee_id="SELF-1002", email="new.officer@frc.gov.bd",
+        )
+        form = OfficerRegistrationForm(data=data)
+
+        self.assertTrue(form.is_valid(), form.errors)
+        user = form.save()
+
+        self.assertEqual(user.role.code, "officer")
+        self.assertEqual(user.role.division, division)
+        self.assertTrue(user.role.is_system)
+
     def test_custom_named_head_role_is_detected_as_director(self):
         custom_role = Role.objects.create(
             name="Custom Division Head", code="custom-division-head",

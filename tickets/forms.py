@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 
 from accounts.models import User
 from core.models import Division
@@ -69,9 +70,6 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["product"].queryset = Product.objects.filter(is_active=True).select_related("division")
         self.fields["category"].queryset = TicketCategory.objects.filter(is_active=True)
         self.fields["priority"].queryset = TicketPriority.objects.filter(is_active=True)
-        self.fields["expected_behavior"].required = True
-        self.fields["actual_behavior"].required = True
-        self.fields["browser_device"].required = True
         self.fields["requesting_division"].queryset = Division.objects.filter(is_active=True)
         self.fields["parent"].queryset = Ticket.objects.none()
         if user:

@@ -60,9 +60,17 @@ class OfficerRegistrationForm(UserCreationForm):
         user = super().save(commit=False)
         user.email = self.cleaned_data["email"]
         user.username = user.email
-        user.role = Role.objects.filter(
-            code="officer", division=self.cleaned_data["division"],
-        ).first() or Role.objects.get(code="officer", division__isnull=True)
+        division = self.cleaned_data["division"]
+        user.role = Role.objects.filter(code="officer", division=division).first()
+        if user.role is None:
+            user.role = Role.objects.filter(code="officer", division__isnull=True).first()
+        if user.role is None:
+            user.role, _ = Role.objects.get_or_create(
+                code="officer", division=division,
+                defaults={
+                    "name": "Officer", "scope": Role.Scope.OWN, "is_system": True,
+                },
+            )
         user.is_active = False
         director = User.objects.filter(
             division=self.cleaned_data["division"], role__is_division_director=True, is_active=True,
