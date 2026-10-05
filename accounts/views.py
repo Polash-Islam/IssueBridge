@@ -1,15 +1,23 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import logout, update_session_auth_hash
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .forms import OfficerRegistrationForm, ProfileForm, UserCreateForm, UserEditForm
 from .models import AccountApprovalRequest, User
 from .services import approve_account_request, can_review_account_request, purge_expired_account_requests
+
+
+@require_POST
+def logout_user(request):
+    
+    logout(request)
+    return redirect("login")
 
 
 @transaction.atomic

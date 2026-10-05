@@ -16,7 +16,7 @@ urlpatterns = [
         auth_views.LoginView.as_view(template_name="registration/login.html", redirect_authenticated_user=True),
         name="login",
     ),
-    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("logout/", account_views.logout_user, name="logout"),
     path("register/", account_views.register, name="register"),
     path("register/pending/", account_views.registration_pending, name="registration_pending"),
     path("", include("dashboard.urls")),

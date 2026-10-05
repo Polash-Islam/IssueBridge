@@ -2,7 +2,9 @@ from datetime import timedelta
 
 from django.core.management import call_command
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase
+from django.conf import settings
+from django.contrib.sessions.models import Session
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -11,6 +13,42 @@ from core.models import Division
 from .forms import OfficerRegistrationForm
 from .models import AccountApprovalRequest, Role, User
 from .services import purge_expired_account_requests
+
+
+class LogoutTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="logout-user", password="TestPassword2026!")
+        self.client.force_login(self.user)
+
+    def test_logout_invalidates_session_and_clears_session_data(self):
+        session = self.client.session
+        session["private_data"] = "session-only value"
+        session.save()
+        old_session_key = session.session_key
+
+        response = self.client.post(reverse("logout"))
+
+        self.assertRedirects(response, reverse("login"))
+        self.assertEqual(dict(self.client.session), {})
+        self.assertFalse(Session.objects.filter(session_key=old_session_key).exists())
+        self.assertEqual(response.cookies[settings.SESSION_COOKIE_NAME]["max-age"], 0)
+
+        replay_client = Client()
+        replay_client.cookies[settings.SESSION_COOKIE_NAME] = old_session_key
+        response = replay_client.get(reverse("dashboard"))
+        self.assertRedirects(response, reverse("login") + "?next=" + reverse("dashboard"))
+
+    def test_get_does_not_log_user_out(self):
+        response = self.client.get(reverse("logout"))
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(self.client.session["_auth_user_id"], str(self.user.pk))
+
+    def test_logout_requires_csrf_token(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        response = client.post(reverse("logout"))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(client.session["_auth_user_id"], str(self.user.pk))
 
 
 class RoleAdminTests(TestCase):
