@@ -1,0 +1,147 @@
+.notification-center .notification-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 20px;
+  background: #f8faf9;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 0 1 210px;
+  min-width: 160px;
+}
+
+.notification-date-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4a5b6b;
+}
+
+.notification-date-field input[type="date"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d5e2dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #254b41;
+  font: inherit;
+  font-size: 12px;
+  color-scheme: light;
+}
+
+.notification-date-field input[type="date"]:focus-visible {
+  outline: none;
+  border-color: #087057;
+  box-shadow: 0 0 0 3px rgba(8, 112, 87, .12);
+}
+
+.notification-date-field input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: .65;
+}
+
+.notification-filter-actions,
+.notification-page-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notification-filter-actions .btn,
+.notification-page-links .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.notification-center .btn-secondary:hover {
+  background: #edf5f1;
+  border-color: #aacbbd;
+  color: #087057;
+}
+
+.notification-center .btn:focus-visible {
+  outline: 2px solid #087057;
+  outline-offset: 3px;
+}
+
+.notification-filters .errorlist {
+  margin: 0;
+  padding-left: 16px;
+  color: #b74343;
+  font-size: 11px;
+}
+
+.notification-filters > .errorlist {
+  flex-basis: 100%;
+}
+
+.notification-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 18px 20px;
+  border-top: 1px solid var(--line);
+  background: #f8faf9;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.notification-page-links [aria-current="page"] {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #e9f2ef;
+  color: #17634f;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .notification-center .notification-filters {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .notification-date-field {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .notification-filter-actions {
+    width: 100%;
+  }
+
+  .notification-filter-actions .btn {
+    flex: 1;
+  }
+
+  .notification-pagination {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .notification-page-links {
+    width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .notification-date-field {
+    flex-basis: 100%;
+  }
+}

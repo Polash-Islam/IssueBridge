@@ -1,5 +1,7 @@
 ﻿{% extends "base.html" %}
+{% load static %}
 {% block title %}Notifications · IssueBridge{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/notifications.css' %}">{% endblock %}
 {% block content %}
 <div class="page-heading heading-actions compact-heading">
   <div><span class="eyebrow">YOUR UPDATES</span><h1>Notifications</h1><p>Assignment, status, meeting, comment, and verification activity.</p></div>
@@ -14,8 +16,10 @@
     <input type="hidden" name="scope" value="{{ scope }}">
     <div class="notification-date-field">{{ filter_form.start_date.label_tag }}{{ filter_form.start_date }}{{ filter_form.start_date.errors }}</div>
     <div class="notification-date-field">{{ filter_form.end_date.label_tag }}{{ filter_form.end_date }}{{ filter_form.end_date.errors }}</div>
-    <button class="btn btn-secondary" type="submit">Apply filters</button>
-    <a class="btn btn-secondary" href="{% url 'notification_list' %}?scope={{ scope }}">Reset</a>
+    <div class="notification-filter-actions">
+      <button class="btn btn-primary" type="submit">Apply filters</button>
+      <a class="btn btn-secondary" href="{% url 'notification_list' %}?scope={{ scope }}">Reset</a>
+    </div>
     {{ filter_form.non_field_errors }}
   </form>
   {% for item in notifications %}
