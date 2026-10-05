@@ -7,6 +7,19 @@ from tickets.access import visible_tickets_for
 from .models import Meeting, MeetingType
 
 
+class NotificationFilterForm(forms.Form):
+    start_date = forms.DateField(required=False, label="From date", widget=forms.DateInput(attrs={"type": "date"}))
+    end_date = forms.DateField(required=False, label="To date", widget=forms.DateInput(attrs={"type": "date"}))
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get("start_date")
+        end = cleaned.get("end_date")
+        if start and end and start > end:
+            raise ValidationError("From date must be on or before To date.")
+        return cleaned
+
+
 class MeetingForm(forms.ModelForm):
     participants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(), widget=forms.SelectMultiple(attrs={"size": 8}),

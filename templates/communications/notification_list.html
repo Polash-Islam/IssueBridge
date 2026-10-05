@@ -1,6 +1,41 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Notifications · IssueBridge{% endblock %}
 {% block content %}
-<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">YOUR UPDATES</span><h1>Notifications</h1><p>Assignment, status, meeting, comment, and verification activity.</p></div>{% if unread_notification_count %}<form method="post" action="{% url 'notifications_read_all' %}">{% csrf_token %}<button class="btn btn-secondary">✓ Mark all as read</button></form>{% endif %}</div><div class="scope-tabs"><a href="?scope=all" class="{% if scope == 'all' %}active{% endif %}">All</a><a href="?scope=unread" class="{% if scope == 'unread' %}active{% endif %}">Unread {% if unread_notification_count %}<span>{{ unread_notification_count }}</span>{% endif %}</a></div>
-<section class="panel notification-center">{% for item in notifications %}<a href="{% url 'notification_open' item.pk %}" class="notification-row {% if not item.is_read %}unread{% endif %}"><span class="notification-kind kind-{{ item.kind|lower }}">{% if item.kind == 'MEETING' %}◇{% elif item.kind == 'COMMENT' %}◌{% elif item.kind == 'ASSIGNED' %}↗{% elif item.kind == 'VERIFICATION' %}✓{% elif item.kind == 'ACCOUNT_APPROVAL' %}♙{% else %}◎{% endif %}</span><span class="notification-copy"><span>{% if item.actor %}<strong>{{ item.actor.full_name }}</strong> {% endif %}{{ item.verb }}</span><small>{% if item.ticket %}{{ item.ticket.ticket_number }} · {% elif item.meeting %}{{ item.meeting.reference }} · {% elif item.approval_request %}{{ item.approval_request.division.code }} account · {% endif %}{{ item.created_at|timesince }} ago</small></span>{% if not item.is_read %}<i></i>{% endif %}<b>→</b></a>{% empty %}<div class="empty-state"><span>✓</span><h3>You’re all caught up</h3><p>New work and collaboration updates will appear here.</p></div>{% endfor %}</section>
+<div class="page-heading heading-actions compact-heading">
+  <div><span class="eyebrow">YOUR UPDATES</span><h1>Notifications</h1><p>Assignment, status, meeting, comment, and verification activity.</p></div>
+  {% if unread_notification_count %}<form method="post" action="{% url 'notifications_read_all' %}">{% csrf_token %}<button class="btn btn-secondary">✓ Mark all as read</button></form>{% endif %}
+</div>
+<div class="scope-tabs">
+  <a href="{% querystring scope='all' page=None %}" class="{% if scope == 'all' %}active{% endif %}">All</a>
+  <a href="{% querystring scope='unread' page=None %}" class="{% if scope == 'unread' %}active{% endif %}">Unread {% if unread_notification_count %}<span>{{ unread_notification_count }}</span>{% endif %}</a>
+</div>
+<section class="panel notification-center">
+  <form class="filter-bar notification-filters" method="get">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    <div class="notification-date-field">{{ filter_form.start_date.label_tag }}{{ filter_form.start_date }}{{ filter_form.start_date.errors }}</div>
+    <div class="notification-date-field">{{ filter_form.end_date.label_tag }}{{ filter_form.end_date }}{{ filter_form.end_date.errors }}</div>
+    <button class="btn btn-secondary" type="submit">Apply filters</button>
+    <a class="btn btn-secondary" href="{% url 'notification_list' %}?scope={{ scope }}">Reset</a>
+    {{ filter_form.non_field_errors }}
+  </form>
+  {% for item in notifications %}
+  <a href="{% url 'notification_open' item.pk %}" class="notification-row {% if not item.is_read %}unread{% endif %}">
+    <span class="notification-kind kind-{{ item.kind|lower }}">{% if item.kind == 'MEETING' %}◇{% elif item.kind == 'COMMENT' %}◌{% elif item.kind == 'ASSIGNED' %}↗{% elif item.kind == 'VERIFICATION' %}✓{% elif item.kind == 'ACCOUNT_APPROVAL' %}♙{% else %}◎{% endif %}</span>
+    <span class="notification-copy"><span>{% if item.actor %}<strong>{{ item.actor.full_name }}</strong> {% endif %}{{ item.verb }}</span><small>{% if item.ticket %}{{ item.ticket.ticket_number }} · {% elif item.meeting %}{{ item.meeting.reference }} · {% elif item.approval_request %}{{ item.approval_request.division.code }} account · {% endif %}{{ item.created_at|date:"d M Y, h:i A" }} · {{ item.created_at|timesince }} ago</small></span>
+    {% if not item.is_read %}<i></i>{% endif %}<b>→</b>
+  </a>
+  {% empty %}
+  <div class="empty-state"><span>✓</span><h3>No notifications found</h3><p>{% if filter_form.errors %}Please correct the date filters above.{% else %}Try changing the filters. New work and collaboration updates will appear here.{% endif %}</p></div>
+  {% endfor %}
+  {% if page_obj.paginator.count %}
+  <nav class="notification-pagination" aria-label="Notification pages">
+    <span>Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</span>
+    <div class="notification-page-links">
+      {% if page_obj.has_previous %}<a class="btn btn-secondary" href="{% querystring page=1 %}">First</a><a class="btn btn-secondary" href="{% querystring page=page_obj.previous_page_number %}">Previous</a>{% endif %}
+      <span aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="btn btn-secondary" href="{% querystring page=page_obj.next_page_number %}">Next</a><a class="btn btn-secondary" href="{% querystring page=page_obj.paginator.num_pages %}">Last</a>{% endif %}
+    </div>
+  </nav>
+  {% endif %}
+</section>
 {% endblock %}

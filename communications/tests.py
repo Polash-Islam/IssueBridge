@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.core.management import call_command
 from django.test import TestCase
@@ -9,6 +9,80 @@ from accounts.models import User
 from tickets.models import Ticket
 from .access import visible_meetings_for
 from .models import Meeting, MeetingParticipant, MeetingType, Notification
+
+
+class NotificationListTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="notification-reader", email="reader@example.com")
+        self.other_user = User.objects.create_user(username="other-reader", email="other@example.com")
+        self.client.force_login(self.user)
+        self.url = reverse("notification_list")
+
+    def create_notification(self, timestamp, **kwargs):
+        notification = Notification.objects.create(
+            recipient=kwargs.pop("recipient", self.user), kind=Notification.Kind.COMMENT,
+            verb="Test update", **kwargs,
+        )
+        Notification.objects.filter(pk=notification.pk).update(
+            created_at=timezone.make_aware(datetime.fromisoformat(timestamp)),
+        )
+        return notification
+
+    def test_pagination_includes_notifications_beyond_old_limit(self):
+        Notification.objects.bulk_create([
+            Notification(recipient=self.user, kind=Notification.Kind.COMMENT, verb=f"Update {number}")
+            for number in range(105)
+        ])
+        response = self.client.get(self.url)
+        self.assertEqual(len(response.context["notifications"]), 20)
+        self.assertEqual(response.context["page_obj"].paginator.count, 105)
+        response = self.client.get(self.url, {"page": 6})
+        self.assertEqual(len(response.context["notifications"]), 5)
+        self.assertContains(response, "Page 6 of 6")
+
+    def test_date_range_is_inclusive_in_local_timezone_and_respects_scope(self):
+        start = self.create_notification("2026-10-01T00:00:00")
+        end = self.create_notification("2026-10-02T23:59:59")
+        self.create_notification("2026-09-30T23:59:59")
+        self.create_notification("2026-10-03T00:00:00")
+        self.create_notification("2026-10-01T12:00:00", is_read=True)
+        self.create_notification("2026-10-01T12:00:00", recipient=self.other_user)
+        response = self.client.get(self.url, {
+            "scope": "unread", "start_date": "2026-10-01", "end_date": "2026-10-02",
+        })
+        self.assertEqual([item.pk for item in response.context["notifications"]], [end.pk, start.pk])
+
+    def test_page_and_scope_links_keep_date_filters(self):
+        for number in range(21):
+            self.create_notification("2026-10-01T12:00:00")
+        response = self.client.get(self.url, {
+            "scope": "unread", "start_date": "2026-10-01", "end_date": "2026-10-01",
+        })
+        self.assertContains(response, 'scope=unread&amp;start_date=2026-10-01&amp;end_date=2026-10-01&amp;page=2')
+        self.assertContains(response, '?scope=all&amp;start_date=2026-10-01&amp;end_date=2026-10-01"')
+
+    def test_invalid_dates_show_validation_errors(self):
+        for filters in [
+            {"start_date": "bad-date"},
+            {"start_date": "2026-10-04", "end_date": "2026-10-01"},
+        ]:
+            with self.subTest(filters=filters):
+                response = self.client.get(self.url, filters)
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context["filter_form"].errors)
+                self.assertEqual(response.context["page_obj"].paginator.count, 0)
+
+    def test_invalid_page_and_one_sided_date_filter(self):
+        self.create_notification("2026-10-01T12:00:00")
+        self.create_notification("2026-10-03T12:00:00")
+        for filters in [
+            {"start_date": "2026-10-02", "page": "bad-page"},
+            {"end_date": "2026-10-02", "page": "999"},
+        ]:
+            with self.subTest(filters=filters):
+                response = self.client.get(self.url, filters)
+                self.assertEqual(response.context["page_obj"].number, 1)
+                self.assertEqual(response.context["page_obj"].paginator.count, 1)
 
 
 class CollaborationModuleTests(TestCase):

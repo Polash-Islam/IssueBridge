@@ -5,6 +5,7 @@ from datetime import date, datetime, time, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,7 +13,7 @@ from django.utils import timezone
 
 from tickets.access import visible_tickets_for
 from .access import visible_meetings_for
-from .forms import MeetingActionForm, MeetingForm
+from .forms import MeetingActionForm, MeetingForm, NotificationFilterForm
 from .models import Meeting, MeetingHistory, MeetingParticipant, Notification
 from .services import create_meeting, notify_users, record_meeting_action
 
@@ -119,10 +120,23 @@ def meeting_action(request, reference):
 @login_required
 def notification_list(request):
     notifications = request.user.notifications.select_related("actor", "ticket", "meeting", "approval_request")
-    scope = request.GET.get("scope", "all")
+    scope = "unread" if request.GET.get("scope") == "unread" else "all"
     if scope == "unread":
         notifications = notifications.filter(is_read=False)
-    return render(request, "communications/notification_list.html", {"notifications": notifications[:100], "scope": scope})
+    filter_form = NotificationFilterForm(request.GET)
+    if filter_form.is_valid():
+        start_date = filter_form.cleaned_data.get("start_date")
+        end_date = filter_form.cleaned_data.get("end_date")
+        if start_date:
+            notifications = notifications.filter(created_at__date__gte=start_date)
+        if end_date:
+            notifications = notifications.filter(created_at__date__lte=end_date)
+    else:
+        notifications = notifications.none()
+    page_obj = Paginator(notifications.order_by("-created_at", "-pk"), 20).get_page(request.GET.get("page"))
+    return render(request, "communications/notification_list.html", {
+        "notifications": page_obj, "page_obj": page_obj, "scope": scope, "filter_form": filter_form,
+    })
 
 
 @login_required
