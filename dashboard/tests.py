@@ -1,12 +1,14 @@
 from io import BytesIO
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from openpyxl import load_workbook
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 from tickets.access import visible_tickets_for
@@ -66,15 +68,43 @@ class ReportDetailsTests(TestCase):
         self.assertContains(page, "Download PDF")
         self.assertContains(page, f'{reverse("report_export", args=["pdf"])}?status={status}')
 
-    def test_pdf_columns_match_portrait_report_with_status_instead_of_completed(self):
+    def test_pdf_columns_include_status_and_overdue_days(self):
         from .report_pdf import pdf_report_rows
         tickets = list(Ticket.objects.select_related("requester", "current_assignee", "status"))
         rows = list(pdf_report_rows(tickets))
-        self.assertEqual(rows[0], ["Title", "Sent by", "Assigned to", "Created", "Updated", "Deadline", "Status"])
+        self.assertEqual(rows[0], ["Title", "Division", "Sent by", "Assigned to", "Created", "Updated", "Deadline", "Status", "Days overdue"])
         for ticket, row in zip(tickets, rows[1:]):
             self.assertEqual(row[0], ticket.title)
+            self.assertEqual(row[1], ticket.requesting_division.name)
             self.assertNotIn(ticket.ticket_number, row)
-            self.assertEqual(row[-1], ticket.status.name)
+            self.assertEqual(row[-2], ticket.status.name)
+            self.assertEqual(row[-1], ticket.overdue_days)
+
+    def test_overdue_days_and_landscape_pdf(self):
+        from .report_pdf import build_ticket_pdf, pdf_report_rows
+        from tickets.models import WorkflowStatus
+        ticket = Ticket.objects.exclude(status__kind__in=["RESOLVED", "CLOSED"]).first()
+        now = timezone.now()
+        with patch("tickets.models.timezone.now", return_value=now):
+            for deadline, expected in [(None, 0), (now, 0), (now + timedelta(days=1), 0),
+                                       (now - timedelta(hours=1), 1), (now - timedelta(days=3, hours=2), 3)]:
+                ticket.deadline = deadline
+                self.assertEqual(ticket.overdue_days, expected)
+                self.assertEqual(list(pdf_report_rows([ticket]))[1][-1], expected)
+            ticket.save(update_fields=["deadline"])
+            self.client.force_login(self.consultant)
+            response = self.client.get(reverse("reports"))
+            self.assertContains(response, "Days overdue")
+            self.assertEqual(next(t for t in response.context["report_tickets"] if t.pk == ticket.pk).overdue_days, 3)
+            for kind in ["RESOLVED", "CLOSED"]:
+                ticket.status = WorkflowStatus.objects.filter(kind=kind).first()
+                self.assertEqual(ticket.overdue_days, 0)
+        content = build_ticket_pdf([ticket])
+        import re
+        dimensions = re.search(rb"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)", content)
+        self.assertIsNotNone(dimensions)
+        self.assertGreater(float(dimensions[1]), float(dimensions[2]))
+        self.assertTrue(build_ticket_pdf([]).startswith(b"%PDF"))
 
     def test_pdf_export_includes_assignee_and_dates(self):
         self.client.force_login(self.consultant)

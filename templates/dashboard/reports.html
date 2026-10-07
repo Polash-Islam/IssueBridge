@@ -33,7 +33,7 @@
   <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">Download PDF</a></div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Ticket report details">
     <table class="data-table report-ticket-table">
-      <thead><tr><th scope="col">Ticket / Title</th><th scope="col">Division</th><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Sent by</th><th scope="col">Identified by</th><th scope="col">Assigned to</th><th scope="col">Reviewed by</th><th scope="col">Created</th><th scope="col">Updated</th><th scope="col">Deadline</th><th scope="col">Completed</th></tr></thead>
+      <thead><tr><th scope="col">Ticket / Title</th><th scope="col">Division</th><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Days overdue</th><th scope="col">Priority</th><th scope="col">Sent by</th><th scope="col">Identified by</th><th scope="col">Assigned to</th><th scope="col">Reviewed by</th><th scope="col">Created</th><th scope="col">Updated</th><th scope="col">Deadline</th><th scope="col">Completed</th></tr></thead>
       <tbody>
         {% for ticket in report_tickets %}
         <tr>
@@ -41,6 +41,7 @@
           <td>{{ ticket.requesting_division.name }}</td>
           <td>{{ ticket.product.name }}</td><td>{{ ticket.category.name }}</td>
           <td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></td>
+          <td class="{% if ticket.is_overdue %}danger-text{% endif %}">{{ ticket.overdue_days }}</td>
           <td><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></td>
           <td><span class="stacked"><strong>{{ ticket.requester.full_name }}</strong><small>{{ ticket.requester.email }}</small></span></td>
           <td>{{ ticket.identified_by.full_name }}</td>
@@ -51,7 +52,7 @@
           <td class="{% if ticket.is_overdue %}danger-text{% endif %}">{{ ticket.deadline|date:"d M Y, H:i"|default:"No deadline" }}{% if ticket.is_overdue %}<span class="stacked"><small>Overdue</small></span>{% endif %}</td>
           <td>{{ ticket.completed_at|date:"d M Y, H:i"|default:"Pending" }}</td>
         </tr>
-        {% empty %}<tr><td colspan="14" class="empty-table">No tickets match the selected filters.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="15" class="empty-table">No tickets match the selected filters.</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

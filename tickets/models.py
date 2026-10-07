@@ -143,6 +143,13 @@ class Ticket(models.Model):
         return bool(self.deadline and self.deadline < timezone.now() and self.status.kind not in {"RESOLVED", "CLOSED"})
 
     @property
+    def overdue_days(self):
+        now = timezone.now()
+        if not self.deadline or self.deadline >= now or self.status.kind in {"RESOLVED", "CLOSED"}:
+            return 0
+        return max(1, (now - self.deadline).days)
+
+    @property
     def due_label(self):
         if not self.deadline:
             return "No deadline"
