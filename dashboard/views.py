@@ -4,6 +4,7 @@ import csv
 from xml.sax.saxutils import escape
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -12,6 +13,7 @@ from django.utils import timezone
 from tickets.access import visible_tickets_for
 from tickets.models import TicketPriority, WorkflowStatus
 from core.models import Division
+from .forms import ReportDateFilterForm
 
 
 @login_required
@@ -58,8 +60,11 @@ def _report_queryset(request):
     division = request.GET.get("division", "")
     status = request.GET.get("status", "")
     priority = request.GET.get("priority", "")
-    start = request.GET.get("start", "")
-    end = request.GET.get("end", "")
+    dates = ReportDateFilterForm(request.GET)
+    if not dates.is_valid():
+        raise ValidationError("Please enter valid From and To dates, with From on or before To.")
+    start = dates.cleaned_data["start"]
+    end = dates.cleaned_data["end"]
     if division:
         tickets = tickets.filter(requesting_division__code=division)
     if status:
@@ -75,42 +80,43 @@ def _report_queryset(request):
 
 @login_required
 def reports(request):
-    tickets = _report_queryset(request)
+    filter_error = ""
+    try:
+        tickets = _report_queryset(request)
+    except ValidationError as error:
+        filter_error = error.messages[0]
+        tickets = visible_tickets_for(request.user).none()
     now = timezone.now()
     resolved = tickets.filter(status__kind__in=["RESOLVED", "CLOSED"])
     durations = [
         (completed_at - created_at).total_seconds() / 3600
         for created_at, completed_at in resolved.values_list("created_at", "completed_at") if completed_at
     ]
-    groups = {
-        "status_data": list(tickets.values("status__name", "status__color", "status__kind").annotate(total=Count("id")).order_by("status__sort_order")),
-        "division_data": list(tickets.values("requesting_division__code", "requesting_division__name").annotate(total=Count("id")).order_by("-total")),
-        "products": list(tickets.values("product__name").annotate(total=Count("id")).order_by("-total")[:8]),
-        "categories": list(tickets.values("category__name").annotate(total=Count("id")).order_by("-total")[:8]),
-        "officers": list(tickets.exclude(current_assignee=None).values("current_assignee__first_name", "current_assignee__last_name").annotate(total=Count("id"), open=Count("id", filter=~Q(status__kind__in=["RESOLVED", "CLOSED"]))).order_by("-open", "-total")[:8]),
-    }
-    max_group = max([row["total"] for row in groups["division_data"] + groups["products"] + groups["categories"]], default=1)
-    for collection in (groups["division_data"], groups["products"], groups["categories"]):
-        for row in collection:
-            row["percent"] = round(row["total"] / max_group * 100)
     context = {
+        "filter_error": filter_error,
         "metrics": {
             "total": tickets.count(), "open": tickets.exclude(status__kind__in=["RESOLVED", "CLOSED"]).count(),
             "resolved": resolved.count(), "overdue": tickets.filter(deadline__lt=now).exclude(status__kind__in=["RESOLVED", "CLOSED"]).count(),
             "reopened": tickets.filter(status__code="reopened").count(),
             "avg_hours": round(sum(durations) / len(durations), 1) if durations else 0,
         },
-        **groups,
+        "status_data": list(tickets.values("status__name", "status__color", "status__kind").annotate(total=Count("id")).order_by("status__sort_order")),
+        "officers": list(
+            tickets.exclude(current_assignee=None)
+            .values("current_assignee_id", "current_assignee__first_name", "current_assignee__last_name", "current_assignee__username")
+            .annotate(total=Count("id"), open=Count("id", filter=~Q(status__kind__in=["RESOLVED", "CLOSED"])))
+            .order_by("-open", "-total", "current_assignee__username")
+        ),
         "report_tickets": tickets.select_related("identified_by", "reviewed_by").order_by("-created_at", "-pk"),
         "division_options": Division.objects.filter(is_active=True), "statuses": WorkflowStatus.objects.filter(is_active=True),
         "priorities": TicketPriority.objects.filter(is_active=True), "filters": request.GET,
     }
-    return render(request, "dashboard/reports.html", context)
+    return render(request, "dashboard/reports.html", context, status=400 if filter_error else 200)
 
 
 def _report_rows(tickets, detailed=False):
     if detailed:
-        yield ["Ticket ID", "Title", "Division", "Product", "Category", "Status", "Priority", "Sent by", "Identified by", "Assigned to", "Reviewed by", "Created", "Updated", "Deadline", "Completed"]
+        yield ["Ticket ID", "Title", "Division", "Status", "Sent by", "Assigned to", "Created", "Updated", "Deadline", "Completed"]
     else:
         yield ["Ticket ID", "Title", "Division", "Product", "Category", "Priority", "Status", "Requester", "Assignee", "Created", "Deadline", "Completed"]
     for ticket in tickets.select_related("requesting_division", "product", "category", "priority", "status", "requester", "current_assignee", "identified_by", "reviewed_by"):
@@ -123,8 +129,7 @@ def _report_rows(tickets, detailed=False):
             timezone.localtime(ticket.completed_at).strftime("%Y-%m-%d %H:%M") if ticket.completed_at else "",
         ]
         if detailed:
-            row = row[:5] + [row[6], row[5], row[7], ticket.identified_by.full_name,
-                row[8] or "Unassigned", ticket.reviewed_by.full_name if ticket.reviewed_by else "Not reviewed",
+            row = row[:3] + [row[6], row[7], row[8] or "Unassigned",
                 row[9], timezone.localtime(ticket.updated_at).strftime("%Y-%m-%d %H:%M"),
                 row[10] or "No deadline", row[11] or "Pending"]
         yield row
@@ -132,7 +137,10 @@ def _report_rows(tickets, detailed=False):
 
 @login_required
 def report_export(request, format):
-    tickets = _report_queryset(request).order_by("-created_at")
+    try:
+        tickets = _report_queryset(request).order_by("-created_at")
+    except ValidationError as error:
+        return HttpResponse(error.messages[0], status=400, content_type="text/plain")
     rows = list(_report_rows(tickets, detailed=format == "xlsx"))
     filename = f"frc-ticket-report-{timezone.localdate().isoformat()}"
     if format == "csv":

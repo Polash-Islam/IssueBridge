@@ -1,4 +1,7 @@
 from io import BytesIO
+from collections import Counter
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from openpyxl import load_workbook
 from django.core.management import call_command
@@ -52,13 +55,13 @@ class ReportDetailsTests(TestCase):
         self.assertIn(".xlsx", response["Content-Disposition"])
         sheet = load_workbook(BytesIO(response.content)).active
         rows = list(sheet.values)
-        self.assertEqual(rows[0][7:13], ("Sent by", "Identified by", "Assigned to", "Reviewed by", "Created", "Updated"))
+        self.assertEqual(rows[0], ("Ticket ID", "Title", "Division", "Status", "Sent by", "Assigned to", "Created", "Updated", "Deadline", "Completed"))
         expected = visible.filter(status__code=status)
         self.assertEqual({row[0] for row in rows[1:]}, set(expected.values_list("ticket_number", flat=True)))
         for row in rows[1:]:
             ticket = expected.get(ticket_number=row[0])
-            self.assertEqual(row[7], ticket.requester.full_name)
-            self.assertEqual(row[8], ticket.identified_by.full_name)
+            self.assertEqual(row[4], ticket.requester.full_name)
+            self.assertEqual(row[5], ticket.current_assignee.full_name if ticket.current_assignee else "Unassigned")
         page = self.client.get(reverse("reports"), {"status": status})
         self.assertContains(page, "Download Excel")
         self.assertContains(page, f'{reverse("report_export", args=["xlsx"])}?status={status}')
@@ -69,3 +72,67 @@ class ReportDetailsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_each_filter_and_combination_updates_report_and_excel(self):
+        self.client.force_login(self.consultant)
+        tickets = list(Ticket.objects.select_related("requesting_division", "status", "priority"))
+        target = tickets[0]
+        dhaka = ZoneInfo("Asia/Dhaka")
+        for index, ticket in enumerate(tickets):
+            created = datetime(2026, 9, 10 + index, 12, tzinfo=dhaka)
+            Ticket.objects.filter(pk=ticket.pk).update(created_at=created)
+            ticket.created_at = created
+        cases = [
+            {}, {"division": target.requesting_division.code},
+            {"status": target.status.code}, {"priority": target.priority.code},
+            {"start": "2026-09-11"}, {"end": "2026-09-12"},
+            {"start": "2026-09-10", "end": "2026-09-10"},
+            {"division": target.requesting_division.code, "status": target.status.code,
+             "priority": target.priority.code, "start": "2026-09-10", "end": "2026-09-10"},
+            {"start": "2027-01-01"},
+        ]
+        for filters in cases:
+            with self.subTest(filters=filters):
+                expected = [t for t in tickets if
+                    (not filters.get("division") or t.requesting_division.code == filters["division"]) and
+                    (not filters.get("status") or t.status.code == filters["status"]) and
+                    (not filters.get("priority") or t.priority.code == filters["priority"]) and
+                    (not filters.get("start") or t.created_at.date().isoformat() >= filters["start"]) and
+                    (not filters.get("end") or t.created_at.date().isoformat() <= filters["end"])]
+                response = self.client.get(reverse("reports"), filters)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual({t.pk for t in response.context["report_tickets"]}, {t.pk for t in expected})
+                self.assertEqual(response.context["metrics"]["total"], len(expected))
+                self.assertEqual({r["status__name"]: r["total"] for r in response.context["status_data"]}, Counter(t.status.name for t in expected))
+                assigned = Counter(t.current_assignee_id for t in expected if t.current_assignee_id)
+                opened = Counter(t.current_assignee_id for t in expected if t.current_assignee_id and t.status.kind not in {"RESOLVED", "CLOSED"})
+                self.assertEqual({r["current_assignee_id"]: r["total"] for r in response.context["officers"]}, assigned)
+                self.assertEqual({r["current_assignee_id"]: r["open"] for r in response.context["officers"]}, {pk: opened[pk] for pk in assigned})
+                for key, value in filters.items():
+                    self.assertEqual(response.context["filters"][key], value)
+                export = self.client.get(reverse("report_export", args=["xlsx"]), filters)
+                self.assertEqual(export.status_code, 200)
+                rows = list(load_workbook(BytesIO(export.content)).active.values)
+                self.assertEqual({r[0] for r in rows[1:]}, {t.ticket_number for t in expected})
+
+    def test_date_filter_uses_dhaka_day_boundaries(self):
+        self.client.force_login(self.consultant)
+        tickets = list(Ticket.objects.all()[:3])
+        dhaka = ZoneInfo("Asia/Dhaka")
+        moments = [datetime(2026, 9, 9, 23, 59, tzinfo=dhaka),
+                   datetime(2026, 9, 10, 0, 0, tzinfo=dhaka),
+                   datetime(2026, 9, 10, 23, 59, tzinfo=dhaka)]
+        for ticket, moment in zip(tickets, moments):
+            Ticket.objects.filter(pk=ticket.pk).update(created_at=moment)
+        response = self.client.get(reverse("reports"), {"start": "2026-09-10", "end": "2026-09-10"})
+        self.assertEqual({t.pk for t in response.context["report_tickets"]}, {t.pk for t in tickets[1:]})
+
+    def test_invalid_dates_show_validation_error(self):
+        self.client.force_login(self.consultant)
+        for filters in [{"start": "invalid"}, {"end": "2026-02-30"},
+                        {"start": "2026-09-12", "end": "2026-09-10"}]:
+            with self.subTest(filters=filters):
+                response = self.client.get(reverse("reports"), filters)
+                self.assertContains(response, "Please enter valid From and To dates", status_code=400)
+                export = self.client.get(reverse("report_export", args=["xlsx"]), filters)
+                self.assertEqual(export.status_code, 400)

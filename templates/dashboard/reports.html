@@ -8,7 +8,27 @@
   <div class="field"><label>Priority</label><select name="priority"><option value="">All priorities</option>{% for item in priorities %}<option value="{{ item.code }}" {% if filters.priority == item.code %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></div>
   <div class="field"><label>From</label><input type="date" name="start" value="{{ filters.start }}"></div><div class="field"><label>To</label><input type="date" name="end" value="{{ filters.end }}"></div><button class="btn btn-primary">Run report</button>
 </form>
+{% if filter_error %}<p class="danger-text" role="alert">{{ filter_error }}</p>{% endif %}
 <section class="report-metrics"><div><span>Total tickets</span><strong>{{ metrics.total }}</strong></div><div><span>Open workload</span><strong>{{ metrics.open }}</strong></div><div><span>Resolved</span><strong>{{ metrics.resolved }}</strong></div><div><span>Overdue</span><strong class="danger-text">{{ metrics.overdue }}</strong></div><div><span>Reopened</span><strong>{{ metrics.reopened }}</strong></div><div><span>Avg. resolution</span><strong>{{ metrics.avg_hours }}<small> hrs</small></strong></div></section>
+<section class="panel report-chart report-ticket-panel">
+  <div class="panel-head"><div><h2>All ticket statuses</h2><p>Pending and completed work in the selected report</p></div></div>
+  <div class="status-summary-list">
+    {% for row in status_data %}<div><i style="background:{{ row.status__color }}"></i><span>{{ row.status__name }}</span><small>{{ row.status__kind|title }}</small><strong>{{ row.total }}</strong></div>
+    {% empty %}<div class="empty-mini">No ticket status data for these filters.</div>{% endfor %}
+  </div>
+</section>
+<section class="panel report-chart report-ticket-panel">
+  <div class="panel-head"><div><h2>Assignee workload</h2><p>Assigned and currently open tickets in the selected report</p></div></div>
+  <div class="officer-workload">
+    {% for row in officers %}
+    <div>
+      <span class="avatar">{% if row.current_assignee__first_name or row.current_assignee__last_name %}{{ row.current_assignee__first_name|first }}{{ row.current_assignee__last_name|first }}{% else %}{{ row.current_assignee__username|first|upper }}{% endif %}</span>
+      <span><strong>{% if row.current_assignee__first_name or row.current_assignee__last_name %}{{ row.current_assignee__first_name }} {{ row.current_assignee__last_name }}{% else %}{{ row.current_assignee__username }}{% endif %}</strong><small>{{ row.open }} open of {{ row.total }} assigned</small></span>
+      <div><i style="width:{% widthratio row.open row.total 100 %}%"></i></div>
+    </div>
+    {% empty %}<p class="empty-mini">No assigned workload data for these filters.</p>{% endfor %}
+  </div>
+</section>
 <section class="panel flush-panel report-ticket-panel">
   <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'xlsx' %}?{{ request.GET.urlencode }}">Download Excel</a></div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Ticket report details">
@@ -36,11 +56,4 @@
     </table>
   </div>
 </section>
-<div class="report-grid">
-  <section class="panel report-chart span-two"><div class="panel-head"><div><h2>All ticket statuses</h2><p>Pending and completed work in the selected report</p></div></div><div class="status-summary-list">{% for row in status_data %}<div><i style="background:{{ row.status__color }}"></i><span>{{ row.status__name }}</span><small>{{ row.status__kind|title }}</small><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No ticket status data for these filters.</div>{% endfor %}</div></section>
-  <section class="panel report-chart span-two"><div class="panel-head"><div><h2>Division workload</h2><p>Tickets in the selected reporting period</p></div></div><div class="horizontal-bars">{% for row in division_data %}<div><span>{{ row.requesting_division__code }}</span><div><i style="width:{{ row.percent }}%"></i></div><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No data for these filters.</div>{% endfor %}</div></section>
-  <section class="panel report-chart"><div class="panel-head"><div><h2>Top categories</h2><p>Most common request types</p></div></div><ol class="rank-list">{% for row in categories %}<li><span>{{ row.category__name }}</span><strong>{{ row.total }}</strong></li>{% empty %}<li>No category data.</li>{% endfor %}</ol></section>
-  <section class="panel report-chart"><div class="panel-head"><div><h2>Products</h2><p>Demand by supported system</p></div></div><div class="horizontal-bars compact">{% for row in products %}<div><span>{{ row.product__name }}</span><div><i style="width:{{ row.percent }}%"></i></div><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No product data.</div>{% endfor %}</div></section>
-  <section class="panel report-chart span-two"><div class="panel-head"><div><h2>Assignee workload</h2><p>Assigned and currently open tickets across all divisions</p></div></div><div class="officer-workload">{% for row in officers %}<div><span class="avatar">{{ row.current_assignee__first_name|first }}{{ row.current_assignee__last_name|first }}</span><span><strong>{{ row.current_assignee__first_name }} {{ row.current_assignee__last_name }}</strong><small>{{ row.open }} open of {{ row.total }} assigned</small></span><div><i style="width:{% widthratio row.open row.total 100 %}%"></i></div></div>{% empty %}<div class="empty-mini">No assigned workload data.</div>{% endfor %}</div></section>
-</div>
 {% endblock %}
