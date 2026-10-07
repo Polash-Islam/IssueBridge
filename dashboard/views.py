@@ -1,6 +1,7 @@
 from datetime import timedelta
 from io import BytesIO
 import csv
+from xml.sax.saxutils import escape
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
@@ -100,17 +101,20 @@ def reports(request):
             "avg_hours": round(sum(durations) / len(durations), 1) if durations else 0,
         },
         **groups,
-        "recent": tickets.order_by("-created_at")[:10],
+        "report_tickets": tickets.select_related("identified_by", "reviewed_by").order_by("-created_at", "-pk"),
         "division_options": Division.objects.filter(is_active=True), "statuses": WorkflowStatus.objects.filter(is_active=True),
         "priorities": TicketPriority.objects.filter(is_active=True), "filters": request.GET,
     }
     return render(request, "dashboard/reports.html", context)
 
 
-def _report_rows(tickets):
-    yield ["Ticket ID", "Title", "Division", "Product", "Category", "Priority", "Status", "Requester", "Assignee", "Created", "Deadline", "Completed"]
-    for ticket in tickets.select_related("requesting_division", "product", "category", "priority", "status", "requester", "current_assignee"):
-        yield [
+def _report_rows(tickets, detailed=False):
+    if detailed:
+        yield ["Ticket ID", "Title", "Division", "Product", "Category", "Status", "Priority", "Sent by", "Identified by", "Assigned to", "Reviewed by", "Created", "Updated", "Deadline", "Completed"]
+    else:
+        yield ["Ticket ID", "Title", "Division", "Product", "Category", "Priority", "Status", "Requester", "Assignee", "Created", "Deadline", "Completed"]
+    for ticket in tickets.select_related("requesting_division", "product", "category", "priority", "status", "requester", "current_assignee", "identified_by", "reviewed_by"):
+        row = [
             ticket.ticket_number, ticket.title, ticket.requesting_division.code, ticket.product.name,
             ticket.category.name, ticket.priority.name, ticket.status.name, ticket.requester.full_name,
             ticket.current_assignee.full_name if ticket.current_assignee else "",
@@ -118,12 +122,18 @@ def _report_rows(tickets):
             timezone.localtime(ticket.deadline).strftime("%Y-%m-%d %H:%M") if ticket.deadline else "",
             timezone.localtime(ticket.completed_at).strftime("%Y-%m-%d %H:%M") if ticket.completed_at else "",
         ]
+        if detailed:
+            row = row[:5] + [row[6], row[5], row[7], ticket.identified_by.full_name,
+                row[8] or "Unassigned", ticket.reviewed_by.full_name if ticket.reviewed_by else "Not reviewed",
+                row[9], timezone.localtime(ticket.updated_at).strftime("%Y-%m-%d %H:%M"),
+                row[10] or "No deadline", row[11] or "Pending"]
+        yield row
 
 
 @login_required
 def report_export(request, format):
     tickets = _report_queryset(request).order_by("-created_at")
-    rows = list(_report_rows(tickets))
+    rows = list(_report_rows(tickets, detailed=format == "xlsx"))
     filename = f"frc-ticket-report-{timezone.localdate().isoformat()}"
     if format == "csv":
         response = HttpResponse(content_type="text/csv")
@@ -139,6 +149,9 @@ def report_export(request, format):
         sheet.title = "Ticket Report"
         for row in rows:
             sheet.append(row)
+        for row in sheet.iter_rows(min_row=2):
+            for cell in row:
+                cell.data_type = "s"
         for cell in sheet[1]:
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="173D5F")
@@ -161,8 +174,12 @@ def report_export(request, format):
         output = BytesIO()
         document = SimpleDocTemplate(output, pagesize=landscape(A4), rightMargin=10 * mm, leftMargin=10 * mm, topMargin=10 * mm, bottomMargin=10 * mm)
         styles = getSampleStyleSheet()
-        compact_rows = [rows[0][:8]] + [[Paragraph(str(value), styles["BodyText"]) for value in row[:8]] for row in rows[1:]]
-        table = Table(compact_rows, repeatRows=1, colWidths=[25*mm, 58*mm, 18*mm, 35*mm, 35*mm, 19*mm, 27*mm, 31*mm])
+        from reportlab.lib.styles import ParagraphStyle
+        cell_style = ParagraphStyle("ReportCell", parent=styles["BodyText"], fontSize=6, leading=8)
+        header_style = ParagraphStyle("ReportHeader", parent=cell_style, textColor=colors.white, fontName="Helvetica-Bold")
+        compact_rows = [[Paragraph(escape(str(value)), header_style) for value in rows[0]]]
+        compact_rows += [[Paragraph(escape(str(value)), cell_style) for value in row] for row in rows[1:]]
+        table = Table(compact_rows, repeatRows=1, colWidths=[24*mm, 40*mm, 14*mm, 23*mm, 20*mm, 16*mm, 25*mm, 25*mm, 25*mm, 21*mm, 21*mm, 23*mm])
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#173D5F")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 7),

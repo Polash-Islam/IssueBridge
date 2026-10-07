@@ -9,6 +9,33 @@
   <div class="field"><label>From</label><input type="date" name="start" value="{{ filters.start }}"></div><div class="field"><label>To</label><input type="date" name="end" value="{{ filters.end }}"></div><button class="btn btn-primary">Run report</button>
 </form>
 <section class="report-metrics"><div><span>Total tickets</span><strong>{{ metrics.total }}</strong></div><div><span>Open workload</span><strong>{{ metrics.open }}</strong></div><div><span>Resolved</span><strong>{{ metrics.resolved }}</strong></div><div><span>Overdue</span><strong class="danger-text">{{ metrics.overdue }}</strong></div><div><span>Reopened</span><strong>{{ metrics.reopened }}</strong></div><div><span>Avg. resolution</span><strong>{{ metrics.avg_hours }}<small> hrs</small></strong></div></section>
+<section class="panel flush-panel report-ticket-panel">
+  <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'xlsx' %}?{{ request.GET.urlencode }}">Download Excel</a></div>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Ticket report details">
+    <table class="data-table report-ticket-table">
+      <thead><tr><th scope="col">Ticket / Title</th><th scope="col">Division</th><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Sent by</th><th scope="col">Identified by</th><th scope="col">Assigned to</th><th scope="col">Reviewed by</th><th scope="col">Created</th><th scope="col">Updated</th><th scope="col">Deadline</th><th scope="col">Completed</th></tr></thead>
+      <tbody>
+        {% for ticket in report_tickets %}
+        <tr>
+          <td><a class="ticket-cell" href="{{ ticket.get_absolute_url }}"><strong>{{ ticket.ticket_number }}</strong><span title="{{ ticket.title }}">{{ ticket.title }}</span></a></td>
+          <td><span class="stacked"><strong>{{ ticket.requesting_division.code }}</strong><small>{{ ticket.requesting_division.name }}</small></span></td>
+          <td>{{ ticket.product.name }}</td><td>{{ ticket.category.name }}</td>
+          <td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></td>
+          <td><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></td>
+          <td><span class="stacked"><strong>{{ ticket.requester.full_name }}</strong><small>{{ ticket.requester.email }}</small></span></td>
+          <td>{{ ticket.identified_by.full_name }}</td>
+          <td>{% if ticket.current_assignee %}<span class="stacked"><strong>{{ ticket.current_assignee.full_name }}</strong><small>{{ ticket.current_assignee.email }}</small></span>{% else %}Unassigned{% endif %}</td>
+          <td>{{ ticket.reviewed_by.full_name|default:"Not reviewed" }}</td>
+          <td><time datetime="{{ ticket.created_at|date:'c' }}">{{ ticket.created_at|date:"d M Y, H:i" }}</time></td>
+          <td><time datetime="{{ ticket.updated_at|date:'c' }}">{{ ticket.updated_at|date:"d M Y, H:i" }}</time></td>
+          <td class="{% if ticket.is_overdue %}danger-text{% endif %}">{{ ticket.deadline|date:"d M Y, H:i"|default:"No deadline" }}{% if ticket.is_overdue %}<span class="stacked"><small>Overdue</small></span>{% endif %}</td>
+          <td>{{ ticket.completed_at|date:"d M Y, H:i"|default:"Pending" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="14" class="empty-table">No tickets match the selected filters.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 <div class="report-grid">
   <section class="panel report-chart span-two"><div class="panel-head"><div><h2>All ticket statuses</h2><p>Pending and completed work in the selected report</p></div></div><div class="status-summary-list">{% for row in status_data %}<div><i style="background:{{ row.status__color }}"></i><span>{{ row.status__name }}</span><small>{{ row.status__kind|title }}</small><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No ticket status data for these filters.</div>{% endfor %}</div></section>
   <section class="panel report-chart span-two"><div class="panel-head"><div><h2>Division workload</h2><p>Tickets in the selected reporting period</p></div></div><div class="horizontal-bars">{% for row in division_data %}<div><span>{{ row.requesting_division__code }}</span><div><i style="width:{{ row.percent }}%"></i></div><strong>{{ row.total }}</strong></div>{% empty %}<div class="empty-mini">No data for these filters.</div>{% endfor %}</div></section>
