@@ -115,7 +115,7 @@ def _report_rows(tickets, detailed=False):
         yield ["Ticket ID", "Title", "Division", "Product", "Category", "Priority", "Status", "Requester", "Assignee", "Created", "Deadline", "Completed"]
     for ticket in tickets.select_related("requesting_division", "product", "category", "priority", "status", "requester", "current_assignee", "identified_by", "reviewed_by"):
         row = [
-            ticket.ticket_number, ticket.title, ticket.requesting_division.code, ticket.product.name,
+            ticket.ticket_number, ticket.title, ticket.requesting_division.name, ticket.product.name,
             ticket.category.name, ticket.priority.name, ticket.status.name, ticket.requester.full_name,
             ticket.current_assignee.full_name if ticket.current_assignee else "",
             timezone.localtime(ticket.created_at).strftime("%Y-%m-%d %H:%M"),
