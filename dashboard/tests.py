@@ -73,6 +73,28 @@ class ReportDetailsTests(TestCase):
         self.assertEqual(response["Content-Type"], "application/pdf")
         self.assertTrue(response.content.startswith(b"%PDF"))
 
+    def test_excel_is_formatted_for_portrait_printing(self):
+        self.client.force_login(self.consultant)
+        ticket = Ticket.objects.first()
+        ticket.title = "Detailed ticket description " * 8
+        ticket.save(update_fields=["title"])
+        response = self.client.get(reverse("report_export", args=["xlsx"]))
+        sheet = load_workbook(BytesIO(response.content)).active
+        self.assertEqual(sheet.page_setup.orientation, "portrait")
+        self.assertEqual(str(sheet.page_setup.paperSize), sheet.PAPERSIZE_A4)
+        self.assertEqual(sheet.page_setup.fitToWidth, 1)
+        self.assertEqual(sheet.page_setup.fitToHeight, 0)
+        self.assertTrue(sheet.sheet_properties.pageSetUpPr.fitToPage)
+        self.assertEqual(sheet.print_title_rows, "$1:$1")
+        self.assertTrue(sheet.print_area)
+        self.assertLessEqual(max(d.width for d in sheet.column_dimensions.values()), 18)
+        for row in sheet.iter_rows(min_row=2):
+            self.assertTrue(all(c.alignment.wrap_text for c in row))
+            self.assertGreaterEqual(sheet.row_dimensions[row[0].row].height, 60)
+            if row[0].value == ticket.ticket_number:
+                self.assertEqual(row[1].value, ticket.title)
+                self.assertGreater(sheet.row_dimensions[row[0].row].height, 60)
+
     def test_each_filter_and_combination_updates_report_and_excel(self):
         self.client.force_login(self.consultant)
         tickets = list(Ticket.objects.select_related("requesting_division", "status", "priority"))

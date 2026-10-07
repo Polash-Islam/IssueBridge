@@ -1,6 +1,7 @@
 from datetime import timedelta
 from io import BytesIO
 import csv
+from textwrap import wrap
 from xml.sax.saxutils import escape
 
 from django.contrib.auth.decorators import login_required
@@ -151,7 +152,8 @@ def report_export(request, format):
         return response
     if format == "xlsx":
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.worksheet.page import PageMargins
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "Ticket Report"
@@ -160,14 +162,37 @@ def report_export(request, format):
         for row in sheet.iter_rows(min_row=2):
             for cell in row:
                 cell.data_type = "s"
-        for cell in sheet[1]:
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill("solid", fgColor="173D5F")
+        widths = [11, 18, 6, 12, 12, 12, 10, 10, 10, 10]
+        edge = Side(style="thin", color="D9E1E8")
+        border = Border(left=edge, right=edge, top=edge, bottom=edge)
+        for column, width in zip(sheet.columns, widths):
+            sheet.column_dimensions[column[0].column_letter].width = width
+        for row in sheet:
+            for cell in row:
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+                cell.border = border
+                cell.font = Font(name="Calibri", size=10)
+                if cell.row == 1:
+                    cell.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+                    cell.fill = PatternFill("solid", fgColor="173D5F")
+            # Excel does not reliably auto-fit wrapped rows when printing.
+            lines = max(
+                sum(max(1, len(wrap(part, width=max(1, int(width) - 2))))
+                    for part in str(cell.value or "").split("\n"))
+                for cell, width in zip(row, widths)
+            )
+            sheet.row_dimensions[row[0].row].height = min(409, max(32 if row[0].row == 1 else 60, lines * 15 + 12))
         sheet.freeze_panes = "A2"
         sheet.auto_filter.ref = sheet.dimensions
-        for column in sheet.columns:
-            letter = column[0].column_letter
-            sheet.column_dimensions[letter].width = min(max(len(str(cell.value or "")) for cell in column) + 2, 45)
+        sheet.page_setup.orientation = "portrait"
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = 0
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4, header=0.2, footer=0.2)
+        sheet.print_options.horizontalCentered = True
+        sheet.print_title_rows = "1:1"
+        sheet.print_area = sheet.dimensions
         output = BytesIO()
         workbook.save(output)
         response = HttpResponse(output.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
