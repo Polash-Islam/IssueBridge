@@ -30,7 +30,7 @@
   </div>
 </section>
 <section class="panel flush-panel report-ticket-panel">
-  <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'xlsx' %}?{{ request.GET.urlencode }}">Download Excel</a></div>
+  <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">Download PDF</a></div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Ticket report details">
     <table class="data-table report-ticket-table">
       <thead><tr><th scope="col">Ticket / Title</th><th scope="col">Division</th><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Sent by</th><th scope="col">Identified by</th><th scope="col">Assigned to</th><th scope="col">Reviewed by</th><th scope="col">Created</th><th scope="col">Updated</th><th scope="col">Deadline</th><th scope="col">Completed</th></tr></thead>

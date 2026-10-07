@@ -63,8 +63,18 @@ class ReportDetailsTests(TestCase):
             self.assertEqual(row[4], ticket.requester.full_name)
             self.assertEqual(row[5], ticket.current_assignee.full_name if ticket.current_assignee else "Unassigned")
         page = self.client.get(reverse("reports"), {"status": status})
-        self.assertContains(page, "Download Excel")
-        self.assertContains(page, f'{reverse("report_export", args=["xlsx"])}?status={status}')
+        self.assertContains(page, "Download PDF")
+        self.assertContains(page, f'{reverse("report_export", args=["pdf"])}?status={status}')
+
+    def test_pdf_columns_match_portrait_report_with_status_instead_of_completed(self):
+        from .report_pdf import pdf_report_rows
+        tickets = list(Ticket.objects.select_related("requester", "current_assignee", "status"))
+        rows = list(pdf_report_rows(tickets))
+        self.assertEqual(rows[0], ["Title", "Sent by", "Assigned to", "Created", "Updated", "Deadline", "Status"])
+        for ticket, row in zip(tickets, rows[1:]):
+            self.assertEqual(row[0], ticket.title)
+            self.assertNotIn(ticket.ticket_number, row)
+            self.assertEqual(row[-1], ticket.status.name)
 
     def test_pdf_export_includes_assignee_and_dates(self):
         self.client.force_login(self.consultant)

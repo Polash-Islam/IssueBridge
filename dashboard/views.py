@@ -2,7 +2,6 @@ from datetime import timedelta
 from io import BytesIO
 import csv
 from textwrap import wrap
-from xml.sax.saxutils import escape
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -199,28 +198,8 @@ def report_export(request, format):
         response["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
         return response
     if format == "pdf":
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4, landscape
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.lib.units import mm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-        output = BytesIO()
-        document = SimpleDocTemplate(output, pagesize=landscape(A4), rightMargin=10 * mm, leftMargin=10 * mm, topMargin=10 * mm, bottomMargin=10 * mm)
-        styles = getSampleStyleSheet()
-        from reportlab.lib.styles import ParagraphStyle
-        cell_style = ParagraphStyle("ReportCell", parent=styles["BodyText"], fontSize=6, leading=8)
-        header_style = ParagraphStyle("ReportHeader", parent=cell_style, textColor=colors.white, fontName="Helvetica-Bold")
-        compact_rows = [[Paragraph(escape(str(value)), header_style) for value in rows[0]]]
-        compact_rows += [[Paragraph(escape(str(value)), cell_style) for value in row] for row in rows[1:]]
-        table = Table(compact_rows, repeatRows=1, colWidths=[24*mm, 40*mm, 14*mm, 23*mm, 20*mm, 16*mm, 25*mm, 25*mm, 25*mm, 21*mm, 21*mm, 23*mm])
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#173D5F")), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 7),
-            ("GRID", (0, 0), (-1, -1), .25, colors.HexColor("#D9E1E8")), ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F7FA")]),
-        ]))
-        document.build([Paragraph("FRC Ticket Report", styles["Title"]), Paragraph(f"Generated {timezone.localtime():%d %B %Y, %I:%M %p}", styles["Normal"]), Spacer(1, 5*mm), table])
-        response = HttpResponse(output.getvalue(), content_type="application/pdf")
+        from .report_pdf import build_ticket_pdf
+        response = HttpResponse(build_ticket_pdf(tickets), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
         return response
     return HttpResponse("Unsupported export format", status=400)
