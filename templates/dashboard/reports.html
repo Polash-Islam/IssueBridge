@@ -38,7 +38,7 @@
         {% for ticket in report_tickets %}
         <tr>
           <td><a class="ticket-cell" href="{{ ticket.get_absolute_url }}"><strong>{{ ticket.ticket_number }}</strong><span title="{{ ticket.title }}">{{ ticket.title }}</span></a></td>
-          <td><span class="stacked"><strong>{{ ticket.requesting_division.code }}</strong><small>{{ ticket.requesting_division.name }}</small></span></td>
+          <td>{{ ticket.requesting_division.name }}</td>
           <td>{{ ticket.product.name }}</td><td>{{ ticket.category.name }}</td>
           <td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></td>
           <td><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></td>
