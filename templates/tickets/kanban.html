@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Kanban Board · IssueBridge{% endblock %}
 {% block content %}
-<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">VISUAL WORKFLOW</span><h1>Ticket board</h1><p>Move work through approved workflow steps. Review, assignment, and verification gates remain protected.</p></div><a class="btn btn-primary" href="{% url 'ticket_create' %}"><span class="btn-plus">+</span> Create ticket</a></div>
+<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">OPERATIOS TRAIL</span><h1>Service Tracker</h1><p>Oversee the lifecycle of service requests and issues from initial submission to final verification.</p></div><a class="btn btn-primary" href="{% url 'ticket_create' %}"><span class="btn-plus">+</span> Create ticket</a></div>
 <form class="kanban-toolbar" method="get"><div class="filter-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input name="q" value="{{ q }}" placeholder="Search this board…"></div><select name="division"><option value="">All divisions</option>{% for item in divisions %}<option value="{{ item.code }}" {% if selected_division == item.code %}selected{% endif %}>{{ item.code }}</option>{% endfor %}</select><select name="priority"><option value="">All priorities</option>{% for item in priorities %}<option value="{{ item.code }}" {% if selected_priority == item.code %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select><button class="btn btn-secondary">Apply</button><span class="board-guide"><i>↔</i> Drag cards where permitted</span></form>
 <form class="csrf-provider">{% csrf_token %}</form>
 <div class="kanban-scroll"><div class="kanban-board" data-move-url="{% url 'kanban_move' %}">

@@ -33,7 +33,7 @@
         <svg viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 22C7 20 4 16 4 10V5l8-3 8 3v5c0 6-3 10-8 12Z"/></svg>Verification{% if nav_verification_count %}<span class="nav-count attention">{{ nav_verification_count }}</span>{% endif %}
       </a>
       <a href="{% url 'notification_list' %}" class="{% if 'notification' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>Notifications{% if unread_notification_count %}<span class="nav-count attention">{{ unread_notification_count }}</span>{% endif %}</a>
-      <span class="nav-label">Manage</span>
+      <span class="nav-label">Management</span>
       <a href="{% url 'kanban' %}" class="{% if request.resolver_match.url_name == 'kanban' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M4 5h4v14H4zM10 5h4v8h-4zM16 5h4v11h-4z"/></svg>Kanban Board</a>
       <a href="{% url 'meeting_list' %}" class="{% if 'meeting' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z"/></svg>Meetings{% if nav_meetings_count %}<span class="nav-count attention">{{ nav_meetings_count }}</span>{% endif %}</a>
       <a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v15H3V6a2 2 0 0 1 2-2Z"/><path d="M7 13h3M14 13h3M7 17h3"/></svg>Calendar</a>
@@ -44,7 +44,7 @@
     </nav>
     <div class="sidebar-footer">
       <div class="security-dot"></div>
-      <div><strong>Protected government workspace</strong><small>FRC authorized use only</small></div>
+      <div><strong>FRC Internal Hub</strong><small>Authorized Personnel Only</small></div>
     </div>
   </aside>
   <div class="app-shell">
