@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reports · IssueBridge{% endblock %}
 {% block content %}
-<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">OPERATIONAL INTELLIGENCE</span><h1>Reports & analytics</h1><p>Every export includes the filtered tickets across all statuses—pending, active, verification, completed, and closed.</p></div><div class="export-actions"><a class="btn btn-secondary" href="{% url 'report_export' 'csv' %}?{{ request.GET.urlencode }}">CSV</a><a class="btn btn-secondary" href="{% url 'report_export' 'xlsx' %}?{{ request.GET.urlencode }}">Excel</a><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">↓ PDF report</a></div></div>
+<div class="page-heading heading-actions compact-heading"><div><span class="eyebrow">ANALYTICS</span><h1>Performance Reports</h1><p>Export structured performance logs categorized by division, status, priority and resolution timelines.</p></div><div class="export-actions"><a class="btn btn-secondary" href="{% url 'report_export' 'csv' %}?{{ request.GET.urlencode }}">CSV</a><a class="btn btn-secondary" href="{% url 'report_export' 'xlsx' %}?{{ request.GET.urlencode }}">Excel</a><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">↓ PDF report</a></div></div>
 <form class="report-filter panel" method="get">
   <div class="field"><label>Division</label><select name="division"><option value="">All divisions</option>{% for item in division_options %}<option value="{{ item.code }}" {% if filters.division == item.code %}selected{% endif %}>{{ item.code }}</option>{% endfor %}</select></div>
   <div class="field"><label>Status</label><select name="status"><option value="">All statuses</option>{% for item in statuses %}<option value="{{ item.code }}" {% if filters.status == item.code %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></div>
@@ -9,16 +9,16 @@
   <div class="field"><label>From</label><input type="date" name="start" value="{{ filters.start }}"></div><div class="field"><label>To</label><input type="date" name="end" value="{{ filters.end }}"></div><button class="btn btn-primary">Run report</button>
 </form>
 {% if filter_error %}<p class="danger-text" role="alert">{{ filter_error }}</p>{% endif %}
-<section class="report-metrics"><div><span>Total tickets</span><strong>{{ metrics.total }}</strong></div><div><span>Open workload</span><strong>{{ metrics.open }}</strong></div><div><span>Resolved</span><strong>{{ metrics.resolved }}</strong></div><div><span>Overdue</span><strong class="danger-text">{{ metrics.overdue }}</strong></div><div><span>Reopened</span><strong>{{ metrics.reopened }}</strong></div><div><span>Avg. resolution</span><strong>{{ metrics.avg_hours }}<small> hrs</small></strong></div></section>
+<section class="report-metrics"><div><span>Total Tickets</span><strong>{{ metrics.total }}</strong></div><div><span>Open Issues</span><strong>{{ metrics.open }}</strong></div><div><span>Resolved Cases</span><strong>{{ metrics.resolved }}</strong></div><div><span>Overdue Tasks</span><strong class="danger-text">{{ metrics.overdue }}</strong></div><div><span>Reopened Cases</span><strong>{{ metrics.reopened }}</strong></div><div><span>Avg. resolution Time</span><strong>{{ metrics.avg_hours }}<small> hrs</small></strong></div></section>
 <section class="panel report-chart report-ticket-panel">
-  <div class="panel-head"><div><h2>All ticket statuses</h2><p>Pending and completed work in the selected report</p></div></div>
+  <div class="panel-head"><div><h2>Ticket Status Breakdown</h2><p>Overview of task progress and lifecycle stages for the selected timeframe.</p></div></div>
   <div class="status-summary-list">
     {% for row in status_data %}<div><i style="background:{{ row.status__color }}"></i><span>{{ row.status__name }}</span><small>{{ row.status__kind|title }}</small><strong>{{ row.total }}</strong></div>
     {% empty %}<div class="empty-mini">No ticket status data for these filters.</div>{% endfor %}
   </div>
 </section>
 <section class="panel report-chart report-ticket-panel">
-  <div class="panel-head"><div><h2>Assignee workload</h2><p>Assigned and currently open tickets in the selected report</p></div></div>
+  <div class="panel-head"><div><h2>Team Task Allocation</h2><p>Overview of active request distribution & pending ticket volume assigned to each team member.</p></div></div>
   <div class="officer-workload">
     {% for row in officers %}
     <div>
@@ -30,7 +30,7 @@
   </div>
 </section>
 <section class="panel flush-panel report-ticket-panel">
-  <div class="panel-head"><div><h2>Ticket details</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">Download PDF</a></div>
+  <div class="panel-head"><div><h2>Request Log</h2><p>{{ metrics.total }} tickets matching the selected filters. Scroll horizontally to see all columns.</p></div><a class="btn btn-primary" href="{% url 'report_export' 'pdf' %}?{{ request.GET.urlencode }}">↓ PDF report</a></div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Ticket report details">
     <table class="data-table report-ticket-table">
       <thead><tr><th scope="col">Ticket / Title</th><th scope="col">Division</th><th scope="col">Product</th><th scope="col">Category</th><th scope="col">Status</th><th scope="col">Days overdue</th><th scope="col">Priority</th><th scope="col">Sent by</th><th scope="col">Identified by</th><th scope="col">Assigned to</th><th scope="col">Reviewed by</th><th scope="col">Created</th><th scope="col">Updated</th><th scope="col">Deadline</th><th scope="col">Completed</th></tr></thead>
