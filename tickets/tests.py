@@ -71,7 +71,7 @@ class TicketWorkflowTests(TestCase):
             reason="The exported total is still incorrect.",
         )
         ticket.refresh_from_db()
-        self.assertEqual(ticket.status.code, "reopened")
+        self.assertEqual(ticket.status.code, "in-progress")
         self.assertTrue(ticket.verifications.filter(decision="FAILED").exists())
 
     def test_assigned_officer_can_mark_ready_for_verification(self):

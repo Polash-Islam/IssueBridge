@@ -99,7 +99,7 @@ class Command(BaseCommand):
             ("ready-for-it-verification", "in-progress", intake_roles, True),
             ("ready-for-verification", "completed", requester_roles, False),
             ("ready-for-verification", "verification-failed", requester_roles, True),
-            ("verification-failed", "reopened", requester_roles, False), ("reopened", "in-progress", worker_roles, False),
+            ("verification-failed", "in-progress", requester_roles, False), ("reopened", "in-progress", worker_roles, False),
             ("completed", "closed", [roles["super-admin"], roles["director"], roles["senior-it-consultant"]], False),
         ]
         for source, target, allowed, requires_comment in transitions:

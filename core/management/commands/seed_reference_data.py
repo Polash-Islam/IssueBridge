@@ -71,7 +71,7 @@ TRANSITIONS = [
     ("ready-for-it-verification", "in-progress", "intake", True),
     ("ready-for-verification", "completed", "requester", False),
     ("ready-for-verification", "verification-failed", "requester", True),
-    ("verification-failed", "reopened", "requester", False),
+    ("verification-failed", "in-progress", "requester", False),
     ("reopened", "in-progress", "worker", False),
     ("completed", "closed", "closer", False),
 ]

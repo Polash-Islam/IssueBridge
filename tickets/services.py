@@ -221,7 +221,10 @@ def verify_ticket(*, ticket, actor, decision, reason="", request=None):
     target = WorkflowStatus.objects.get(code=target_code)
     transition_ticket(ticket=ticket, to_status=target, actor=actor, comment=reason, request=request)
     if decision == TicketVerification.Decision.FAILED:
-        transition_ticket(ticket=ticket, to_status=WorkflowStatus.objects.get(code="reopened"), actor=actor, request=request)
+        # A failed requester verification reopens work immediately. Keep this
+        # transition tied to the requester's verification action so overdue
+        # tickets also acquire the actual In Progress status.
+        transition_ticket(ticket=ticket, to_status=WorkflowStatus.objects.get(code="in-progress"), actor=actor, request=request)
     record_history(ticket, actor, "VERIFICATION_SUBMITTED", verification.get_decision_display(), request, new={"decision": decision, "reason": reason})
     from communications.models import Notification
     from communications.services import notify_users
