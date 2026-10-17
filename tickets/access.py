@@ -6,7 +6,7 @@ from .models import Ticket, TicketIntakeRoute
 def is_ticket_intake_user(user):
     return bool(
         user.is_authenticated and user.is_active
-        and TicketIntakeRoute.objects.filter(selected_user=user, division__code="IT").exists()
+        and TicketIntakeRoute.objects.filter(selected_users=user, division__code="IT").exists()
     )
 
 

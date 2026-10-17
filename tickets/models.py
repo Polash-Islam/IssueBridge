@@ -10,8 +10,8 @@ class TicketIntakeRoute(models.Model):
     division = models.OneToOneField(
         "core.Division", on_delete=models.CASCADE, related_name="ticket_intake_route",
     )
-    selected_user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ticket_intake_routes",
+    selected_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name="ticket_intake_routes",
     )
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -24,7 +24,7 @@ class TicketIntakeRoute(models.Model):
         verbose_name_plural = "ticket intake routes"
 
     def __str__(self):
-        return f"{self.division}: tickets to {self.selected_user}"
+        return f"{self.division}: tickets routed to {self.selected_users.count()} users"
 
 
 class Product(models.Model):

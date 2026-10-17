@@ -4,20 +4,36 @@
 <div class="page-heading compact-heading">
   <span class="eyebrow">IT DIVISION SETTINGS</span>
   <h1>Ticket routing</h1>
-  <p>Choose who receives new tickets first. The selected user can review and assign incoming tickets.</p>
+  <p>Choose two people who receive new tickets first. Both can review and assign incoming tickets.</p>
 </div>
 <section class="panel simple-form" style="max-width:760px">
   <form method="post">
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="alert alert-error">{{ form.non_field_errors }}</div>{% endif %}
     <div class="field">
-      <label for="{{ form.selected_user.id_for_label }}">{{ form.selected_user.label }} <b>*</b></label>
-      {{ form.selected_user }}
-      {{ form.selected_user.errors }}
-      {% if form.selected_user.help_text %}<small>{{ form.selected_user.help_text }}</small>{% endif %}
+      <label for="{{ form.selected_users.id_for_label }}">{{ form.selected_users.label }} <b>*</b></label>
+      {{ form.selected_users }}
+      {{ form.selected_users.errors }}
+      {% if form.selected_users.help_text %}<small>{{ form.selected_users.help_text }}</small>{% endif %}
     </div>
     <div class="form-actions"><button class="btn btn-primary" type="submit">Save routing</button></div>
   </form>
-  {% if route %}<p class="muted" style="margin-top:1rem">Currently routing new tickets to <strong>{{ route.selected_user.full_name }}</strong>.</p>{% endif %}
+  {% if route and route.selected_users.exists %}
+    <div class="field" style="margin-top:1.25rem">
+      <strong>Currently routed to</strong>
+      <ul style="margin:.6rem 0 0;padding-left:1.25rem">
+        {% for selected_user in route.selected_users.all %}
+          <li style="margin:.45rem 0">
+            {{ selected_user.full_name }}{% if selected_user.email %} <span class="muted">({{ selected_user.email }})</span>{% endif %}
+            <form method="post" action="{% url 'ticket_intake_routing_remove_user' selected_user.pk %}" style="display:inline;margin-left:.5rem">
+              {% csrf_token %}
+              <button class="btn btn-ghost" type="submit">Remove</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+      <small>Each routed user has the same ticket review and assignment access.</small>
+    </div>
+  {% endif %}
 </section>
 {% endblock %}

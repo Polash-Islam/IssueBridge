@@ -185,9 +185,27 @@ def ticket_intake_routing(request):
         route.division = division
         route.updated_by = request.user
         route.save()
-        messages.success(request, f"New tickets will be routed to {route.selected_user.full_name}.")
+        form.save_m2m()
+        routed_names = ", ".join(
+            user.full_name for user in route.selected_users.order_by("first_name", "last_name")
+        )
+        messages.success(request, f"New tickets will be routed to {routed_names}.")
         return redirect("ticket_intake_routing")
     return render(request, "accounts/ticket_intake_routing.html", {"form": form, "route": route})
+
+
+@login_required
+@require_POST
+def ticket_intake_routing_remove_user(request, user_id):
+    if not (request.user.is_super_admin or (request.user.is_director and request.user.is_it_user)):
+        raise PermissionDenied
+    from core.models import Division
+    division = get_object_or_404(Division, code="IT")
+    route = get_object_or_404(TicketIntakeRoute, division=division)
+    selected_user = get_object_or_404(route.selected_users, pk=user_id)
+    route.selected_users.remove(selected_user)
+    messages.success(request, f"{selected_user.full_name} was removed from ticket routing.")
+    return redirect("ticket_intake_routing")
 
 
 @login_required

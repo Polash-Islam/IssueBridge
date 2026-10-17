@@ -230,25 +230,30 @@ class ProfileForm(forms.ModelForm):
 class TicketIntakeRouteForm(forms.ModelForm):
     class Meta:
         model = TicketIntakeRoute
-        fields = ("selected_user",)
+        fields = ("selected_users",)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["selected_user"].queryset = User.objects.filter(
+        # This is a single-choice field. Omitting the empty option removes
+        # Django's default "---------" row and leaves a real user selected.
+        self.fields["selected_users"].queryset = User.objects.filter(
             is_active=True,
         ).filter(
-            Q(division__code="IT") | Q(division__name__iexact="IT"),
+            Q(division__code="IT")
+            | Q(division__name__iexact="IT")
+            | Q(division__name__iexact="Administration, Accounts and Information Technology")
+            | Q(division__name__iexact="Administration, Accounts and Information Technology Division"),
         ).exclude(role__is_division_director=True).select_related(
             "division", "role",
         ).order_by("first_name", "last_name", "email")
-        self.fields["selected_user"].label = "Route new tickets to"
-        self.fields["selected_user"].help_text = "This user will receive new tickets and can review and assign them."
-        self.fields["selected_user"].widget.attrs.setdefault("class", "form-control")
+        self.fields["selected_users"].label = "Route new tickets to"
+        self.fields["selected_users"].help_text = "Select exactly two users. Both can review and assign incoming tickets."
+        self.fields["selected_users"].widget.attrs.setdefault("class", "form-control")
 
-    def clean_selected_user(self):
-        selected_user = self.cleaned_data["selected_user"]
-        if not selected_user.is_active or not selected_user.is_it_user:
-            raise forms.ValidationError("Choose an active user from the IT Division.")
-        if selected_user.is_director:
-            raise forms.ValidationError("Choose an IT user other than the Division Head.")
-        return selected_user
+    def clean_selected_users(self):
+        selected_users = self.cleaned_data["selected_users"]
+        if selected_users.count() != 2:
+            raise forms.ValidationError("Select exactly two users.")
+        if any(not user.is_active or not user.is_it_user or user.is_director for user in selected_users):
+            raise forms.ValidationError("Choose two active IT users other than the Division Head.")
+        return selected_users

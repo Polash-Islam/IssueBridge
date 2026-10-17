@@ -51,10 +51,12 @@ def create_ticket(*, form, user, files, request=None):
     ticket.save()
     ticket.watchers.add(requester, user)
     intake_route = TicketIntakeRoute.objects.filter(
-        division__code="IT", selected_user__is_active=True,
-    ).select_related("selected_user").first()
+        division__code="IT",
+    ).prefetch_related("selected_users").first()
     if not assigned_to and intake_route:
-        ticket.watchers.add(intake_route.selected_user)
+        intake_users = list(intake_route.selected_users.filter(is_active=True))
+        if intake_users:
+            ticket.watchers.add(*intake_users)
     for uploaded in files:
         ticket.attachments.create(
             file=uploaded, original_name=uploaded.name, content_type=getattr(uploaded, "content_type", ""),
@@ -92,7 +94,7 @@ def create_ticket(*, form, user, files, request=None):
         )
     else:
         if intake_route:
-            intake_users = [intake_route.selected_user]
+            intake_users = list(intake_route.selected_users.filter(is_active=True))
         else:
             intake_users = User.objects.filter(
                 is_active=True, role__is_division_director=True,
