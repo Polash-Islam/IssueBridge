@@ -6,6 +6,7 @@ urlpatterns = [
     path("new/", views.user_create, name="user_create"),
     path("approvals/", views.account_approval_list, name="account_approval_list"),
     path("approvals/<int:pk>/approve/", views.account_approve, name="account_approve"),
+    path("ticket-intake/", views.ticket_intake_routing, name="ticket_intake_routing"),
     path("profile/", views.profile, name="profile"),
     path("profile/edit/", views.profile_edit, name="profile_edit"),
     path("profile/password/", views.password_change, name="password_change"),

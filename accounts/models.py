@@ -74,7 +74,19 @@ class User(AbstractUser):
     def role_code(self):
         if self.is_superuser:
             return "super-admin"
-        return self.role.code if self.role else ""
+        if not self.role:
+            return ""
+        role_aliases = {
+            "division-head": "director",
+            "executive-officer": "officer",
+            "assistant-director": "officer",
+            "standard-setting-officer": "officer",
+            "audit-practice-officer": "officer",
+            "administrative-officer": "officer",
+            "intern": "officer",
+            "junior-it-consultant": "officer",
+        }
+        return role_aliases.get(self.role.code, self.role.code)
 
     @property
     def is_super_admin(self):
@@ -90,7 +102,13 @@ class User(AbstractUser):
 
     @property
     def is_it_user(self):
-        return bool(self.division and self.division.code == "IT")
+        if not self.division:
+            return False
+        normalized_name = " ".join(self.division.name.casefold().split())
+        return self.division.code == "IT" or normalized_name in {
+            "it", "information technology",
+            "administration, accounts and information technology division",
+        }
 
     @property
     def can_manage_users(self):

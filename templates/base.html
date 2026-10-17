@@ -38,6 +38,9 @@
       <a href="{% url 'meeting_list' %}" class="{% if 'meeting' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z"/></svg>Meetings{% if nav_meetings_count %}<span class="nav-count attention">{{ nav_meetings_count }}</span>{% endif %}</a>
       <a href="{% url 'calendar' %}" class="{% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M8 2v4M16 2v4M3 9h18M5 4h14a2 2 0 0 1 2 2v15H3V6a2 2 0 0 1 2-2Z"/><path d="M7 13h3M14 13h3M7 17h3"/></svg>Calendar</a>
       <a href="{% url 'reports' %}" class="{% if request.resolver_match.url_name == 'reports' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"/></svg>Reports</a>
+      {% if user.is_super_admin or user.is_director and user.is_it_user %}
+      <a href="{% url 'ticket_intake_routing' %}" class="{% if request.resolver_match.url_name == 'ticket_intake_routing' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h10M4 19h16M17 9l3 3-3 3"/></svg>Ticket routing</a>
+      {% endif %}
       {% if nav_can_manage_users %}
       <a href="{% url 'user_list' %}" class="{% if 'user_' in request.resolver_match.url_name|default:'' or 'account_approval' in request.resolver_match.url_name|default:'' %}active{% endif %}"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Users{% if nav_account_approval_count %}<span class="nav-count attention">{{ nav_account_approval_count }}</span>{% endif %}</a>
       {% endif %}

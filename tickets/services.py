@@ -1,11 +1,12 @@
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from .access import can_assign_ticket, can_review_ticket, can_technical_verify_ticket, can_verify_ticket
+from .access import can_assign_ticket, can_review_ticket, can_technical_verify_ticket, can_verify_ticket, is_ticket_intake_user
 from .models import (
     StatusTransition, Ticket, TicketAssignment, TicketHistory, TicketNumberSequence,
-    TicketReview, TicketTechnicalVerification, TicketVerification, WorkflowStatus,
+    TicketIntakeRoute, TicketReview, TicketTechnicalVerification, TicketVerification, WorkflowStatus,
 )
 
 
@@ -25,8 +26,8 @@ def record_history(ticket, actor, action, description, request=None, previous=No
 
 @transaction.atomic
 def create_ticket(*, form, user, files, request=None):
-    division = form.cleaned_data["requesting_division"]
     requester = form.cleaned_data.get("requested_for") or user
+    division = form.requesting_division
     assigned_to = form.cleaned_data.get("assign_to")
     status_code = "assigned" if assigned_to else "new"
     try:
@@ -49,6 +50,11 @@ def create_ticket(*, form, user, files, request=None):
         ticket.reviewed_by = user
     ticket.save()
     ticket.watchers.add(requester, user)
+    intake_route = TicketIntakeRoute.objects.filter(
+        division__code="IT", selected_user__is_active=True,
+    ).select_related("selected_user").first()
+    if not assigned_to and intake_route:
+        ticket.watchers.add(intake_route.selected_user)
     for uploaded in files:
         ticket.attachments.create(
             file=uploaded, original_name=uploaded.name, content_type=getattr(uploaded, "content_type", ""),
@@ -85,7 +91,18 @@ def create_ticket(*, form, user, files, request=None):
             verb=f"assigned {ticket.ticket_number} to you", actor=user, ticket=ticket,
         )
     else:
-        intake_users = User.objects.filter(is_active=True, role__code="senior-it-consultant")
+        if intake_route:
+            intake_users = [intake_route.selected_user]
+        else:
+            intake_users = User.objects.filter(
+                is_active=True, role__is_division_director=True,
+            ).filter(
+                Q(division__code="IT") | Q(division__name__iexact="IT"),
+            )
+        if not intake_users:
+            intake_users = User.objects.filter(is_active=True).filter(
+                Q(is_superuser=True) | Q(role__code__in=["super-admin", "senior-it-consultant"]),
+            )
         notify_users(intake_users, kind=Notification.Kind.TICKET_CREATED, verb=f"created {ticket.ticket_number}", actor=user, ticket=ticket)
     if requester != user:
         notify_users(
@@ -115,11 +132,27 @@ def transition_ticket(*, ticket, to_status, actor, comment="", request=None):
     assigned_worker = (
         ticket.current_assignee_id == actor.pk and ticket.status.code in execution_statuses
     )
-    if not transition or (not _role_can_transition(actor, transition) and not assigned_worker):
+    requester_verification_handoff = (
+        assigned_worker and ticket.status.code == "in-progress"
+        and to_status.code == "ready-for-verification"
+    )
+    if ticket.status.code in execution_statuses and not assigned_worker:
+        raise PermissionDenied("Only the assigned person can update this task's status.")
+    intake_transition = is_ticket_intake_user(actor) and (
+        (ticket.status.code == "new" and to_status.code == "under-review")
+        or (ticket.status.code == "under-review" and to_status.code in {
+            "validated", "invalid", "need-more-information", "completed",
+        })
+        or (ticket.status.code == "validated" and to_status.code == "assigned")
+    )
+    if (not transition and not requester_verification_handoff) or (
+        transition and not _role_can_transition(actor, transition)
+        and not assigned_worker and not intake_transition
+    ):
         raise PermissionDenied("You are not permitted to make this status change.")
     if actor.role_code == "officer" and ticket.status.code in execution_statuses and ticket.current_assignee_id != actor.pk:
         raise PermissionDenied("Only the assigned IT Officer can update this task.")
-    if transition.requires_comment and not comment.strip():
+    if transition and transition.requires_comment and not comment.strip():
         raise ValidationError("A reason is required for this status change.")
     if to_status.code in {"assigned", "in-progress"} and not ticket.current_assignee_id:
         raise ValidationError("Assign a responsible person before starting work.")

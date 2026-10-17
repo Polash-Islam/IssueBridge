@@ -6,6 +6,27 @@ from django.urls import reverse
 from .validators import validate_attachment
 
 
+class TicketIntakeRoute(models.Model):
+    division = models.OneToOneField(
+        "core.Division", on_delete=models.CASCADE, related_name="ticket_intake_route",
+    )
+    selected_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="ticket_intake_routes",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="updated_ticket_intake_routes",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "ticket intake route"
+        verbose_name_plural = "ticket intake routes"
+
+    def __str__(self):
+        return f"{self.division}: tickets to {self.selected_user}"
+
+
 class Product(models.Model):
     division = models.ForeignKey("core.Division", on_delete=models.PROTECT, related_name="products")
     name = models.CharField(max_length=120)

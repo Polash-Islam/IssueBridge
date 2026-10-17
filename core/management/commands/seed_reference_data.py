@@ -1,12 +1,14 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Q
 
 from communications.models import MeetingType
 from accounts.models import Role
+from accounts.reference_data import seed_account_reference_data
 from tickets.models import (
     StatusTransition, TicketCategory, TicketPriority, WorkflowStatus,
 )
+from tickets.priority_utils import move_priorities_to_temporary_ranks
 
 
 CATEGORY_NAMES = [
@@ -67,6 +69,7 @@ TRANSITIONS = [
     ("in-progress", "waiting-for-meeting", "worker", True),
     ("waiting-for-meeting", "in-progress", "worker", True),
     ("in-progress", "ready-for-it-verification", "worker", True),
+    ("in-progress", "ready-for-verification", "worker", False),
     ("ready-for-it-verification", "ready-for-verification", "intake", False),
     ("ready-for-it-verification", "in-progress", "intake", True),
     ("ready-for-verification", "completed", "requester", False),
@@ -78,10 +81,11 @@ TRANSITIONS = [
 
 
 class Command(BaseCommand):
-    help = "Insert or refresh code-defined reference data without changing divisions or roles."
+    help = "Insert or refresh workflow, division, and registration role reference data."
 
     @transaction.atomic
     def handle(self, *args, **options):
+        seed_account_reference_data()
         for name in CATEGORY_NAMES:
             code = name.lower().replace(" / ", "-").replace(" ", "-")
             TicketCategory.objects.update_or_create(
@@ -89,7 +93,7 @@ class Command(BaseCommand):
             )
 
         # Move every rank out of the canonical range before assigning defaults.
-        TicketPriority.objects.update(rank=10000 + F("rank"))
+        move_priorities_to_temporary_ranks()
         for code, name, rank, color in PRIORITIES:
             priority = (
                 TicketPriority.objects.filter(code=code).first()
@@ -117,8 +121,15 @@ class Command(BaseCommand):
             )
 
         roles = {
-            "intake": Role.objects.filter(code__in=["super-admin", "senior-it-consultant"]),
-            "worker": Role.objects.filter(code__in=["super-admin", "officer"]),
+            "intake": Role.objects.filter(code__in=["super-admin", "senior-it-consultant"]) | Role.objects.filter(
+                Q(division__code="IT") | Q(division__name__iexact="IT"),
+                is_division_director=True,
+            ),
+            "worker": Role.objects.filter(code__in=["super-admin", "officer"]) | Role.objects.filter(name__in=[
+                "Junior IT Consultant", "Executive Officer", "Assistant Director",
+                "Standard Setting Officer", "Audit Practice Officer",
+                "Administrative Officer", "Intern",
+            ]),
             "requester": Role.objects.all(),
             "closer": Role.objects.filter(
                 code__in=["super-admin", "senior-it-consultant"],

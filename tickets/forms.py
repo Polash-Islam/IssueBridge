@@ -2,7 +2,6 @@ from django import forms
 from django.utils import timezone
 
 from accounts.models import User
-from core.models import Division
 from .models import (
     Product, Ticket, TicketCategory, TicketComment, TicketPriority, TicketReview,
     TicketVerification, WorkflowStatus,
@@ -33,9 +32,10 @@ class MultipleFileField(forms.FileField):
 
 class RequesterChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, user):
-        division = user.division.code if user.division_id else "No division"
-        return f"{user.full_name} — {user.email} ({division})"
-
+        full_name = " ".join(
+            part.strip() for part in (user.first_name, user.last_name) if part and part.strip()
+        )
+        return full_name or user.email or user.username
 
 class TicketCreateForm(forms.ModelForm):
     requested_for = RequesterChoiceField(
@@ -43,17 +43,12 @@ class TicketCreateForm(forms.ModelForm):
         label="Requester / submit on behalf of",
         help_text="The selected person will receive and finally verify this ticket.",
     )
-    assign_to = RequesterChoiceField(
-        queryset=User.objects.none(), required=False,
-        label="Assign work to",
-        help_text="This person will receive the task and update its work status.",
-    )
     attachments = MultipleFileField(required=False, help_text="PNG, JPG, PDF, Office, or ZIP. Maximum 10 MB each.")
 
     class Meta:
         model = Ticket
         fields = (
-            "title", "description", "requesting_division", "product", "category", "priority",
+            "title", "description", "product", "category", "priority",
             "expected_behavior", "actual_behavior",
             "browser_device", "additional_notes", "parent",
         )
@@ -70,7 +65,9 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["product"].queryset = Product.objects.filter(is_active=True).select_related("division")
         self.fields["category"].queryset = TicketCategory.objects.filter(is_active=True)
         self.fields["priority"].queryset = TicketPriority.objects.filter(is_active=True)
-        self.fields["requesting_division"].queryset = Division.objects.filter(is_active=True)
+        self.fields["product"].empty_label = "Select Product / System"
+        self.fields["category"].empty_label = "Select Category"
+        self.fields["priority"].empty_label = "Select Priority"
         self.fields["parent"].queryset = Ticket.objects.none()
         if user:
             from .access import visible_tickets_for
@@ -81,15 +78,8 @@ class TicketCreateForm(forms.ModelForm):
                 ).order_by("division__code", "first_name", "last_name")
                 self.fields["requested_for"].queryset = active_users
                 self.fields["requested_for"].required = True
-                self.fields["assign_to"].queryset = active_users
-                self.fields["assign_to"].required = True
             else:
                 self.fields.pop("requested_for")
-                self.fields.pop("assign_to")
-            # if user.division_id and not (user.is_super_admin or user.is_senior_it):
-            #     self.fields["requesting_division"].queryset = Division.objects.filter(pk=user.division_id)
-            #     self.fields["requesting_division"].initial = user.division
-            #     self.fields["product"].queryset = self.fields["product"].queryset.filter(division_id=user.division_id)
         for name, field in self.fields.items():
             field.widget.attrs.setdefault("class", "form-control")
             if not field.widget.attrs.get("placeholder"):
@@ -97,14 +87,22 @@ class TicketCreateForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        division = cleaned.get("requesting_division")
+        requester = cleaned.get("requested_for") or self.user
+        self.requesting_division = requester.division if requester else None
+        if not self.requesting_division:
+            raise forms.ValidationError("Select an account with a Division before creating a ticket.")
         product = cleaned.get("product")
-        can_route_across_divisions = self.user and (self.user.is_super_admin or self.user.is_senior_it)
-        # if division and product and product.division_id != division.id and not can_route_across_divisions:
-        #     self.add_error("product", "Choose a product owned by the requesting division.")
-        # if self.user and self.user.division_id and not (self.user.is_super_admin or self.user.is_senior_it) and division != self.user.division:
-        #     self.add_error("requesting_division", "You can only create tickets for your own division.")
+        if product and product.division_id != self.requesting_division.pk:
+            self.add_error("product", "Choose a Product / System from the requester's Division.")
         return cleaned
+
+    def save(self, commit=True):
+        ticket = super().save(commit=False)
+        ticket.requesting_division = self.requesting_division
+        if commit:
+            ticket.save()
+            self.save_m2m()
+        return ticket
 
 
 class CommentForm(forms.ModelForm):
@@ -149,9 +147,12 @@ class AssignmentForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related(
-            "division", "role",
-        ).order_by("division__code", "first_name", "last_name")
+        self.fields["assigned_to"].queryset = User.objects.filter(is_active=True).exclude(
+            role__is_division_director=True,
+        ).select_related("division", "role").order_by(
+            "division__code", "first_name", "last_name",
+        )
+        self.fields["assigned_to"].empty_label = "Select a responsible person"
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 
@@ -163,6 +164,7 @@ class TransitionForm(forms.Form):
     def __init__(self, *args, queryset=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["to_status"].queryset = queryset or WorkflowStatus.objects.none()
+        self.fields["to_status"].empty_label = None
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
 

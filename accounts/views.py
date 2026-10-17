@@ -4,13 +4,15 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import logout, update_session_auth_hash
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .forms import OfficerRegistrationForm, ProfileForm, UserCreateForm, UserEditForm
+from .forms import OfficerRegistrationForm, ProfileForm, TicketIntakeRouteForm, UserCreateForm, UserEditForm
 from .models import AccountApprovalRequest, User
 from .services import approve_account_request, can_review_account_request, purge_expired_account_requests
+from tickets.models import TicketIntakeRoute
 
 
 @require_POST
@@ -33,14 +35,20 @@ def register(request):
         directors = User.objects.filter(
             division=user.division, role__is_division_director=True, is_active=True,
         )
+        approvers = directors
+        if not directors.exists():
+            approvers = User.objects.filter(is_active=True).filter(
+                Q(is_superuser=True) | Q(role__code="super-admin"),
+            )
         notify_users(
-            directors, kind=Notification.Kind.ACCOUNT_APPROVAL,
-            verb=f"requested an Officer account for {user.division.code}",
+            approvers, kind=Notification.Kind.ACCOUNT_APPROVAL,
+            verb=f"requested a {user.role.name} account for {user.division.code}",
             approval_request=approval_request,
         )
         request.session["registration_submitted"] = {
             "email": user.email,
             "division": user.division.name,
+            "role": user.role.name,
             "expires_at": timezone.localtime(approval_request.expires_at).isoformat(),
         }
         return redirect("registration_pending")
@@ -85,10 +93,11 @@ def user_list(request):
             role__is_division_director=True,
         ).exclude(role__code="super-admin")
     elif request.user.is_senior_it:
-        users = users.filter(division__code="IT", role__code="officer")
+        users = users.filter(division__code="IT").filter(
+            Q(role__code="officer") | Q(role__name="Junior IT Consultant"),
+        )
     q = request.GET.get("q", "").strip()
     if q:
-        from django.db.models import Q
         users = users.filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(email__icontains=q) | Q(employee_id__icontains=q))
     approvals = AccountApprovalRequest.objects.none()
     if request.user.is_super_admin:
@@ -132,9 +141,9 @@ def account_approve(request, pk):
         from communications.services import notify_users
         notify_users(
             [applicant], kind=Notification.Kind.ACCOUNT_APPROVAL,
-            verb="approved your Officer account", actor=request.user, approval_request=approved,
+            verb=f"approved your {applicant.role.name} account", actor=request.user, approval_request=approved,
         )
-        messages.success(request, f"{applicant.full_name}'s account was approved and can now sign in.")
+        messages.success(request, f"{applicant.full_name}'s {applicant.role.name} account was approved and can now sign in.")
     return redirect("account_approval_list")
 
 
@@ -161,6 +170,24 @@ def user_edit(request, pk):
         messages.success(request, f"{user.full_name}'s account was updated.")
         return redirect("user_list")
     return render(request, "accounts/user_edit.html", {"form": form, "target": target})
+
+
+@login_required
+def ticket_intake_routing(request):
+    if not (request.user.is_super_admin or (request.user.is_director and request.user.is_it_user)):
+        raise PermissionDenied
+    from core.models import Division
+    division = get_object_or_404(Division, code="IT")
+    route = TicketIntakeRoute.objects.filter(division=division).first()
+    form = TicketIntakeRouteForm(request.POST or None, instance=route)
+    if request.method == "POST" and form.is_valid():
+        route = form.save(commit=False)
+        route.division = division
+        route.updated_by = request.user
+        route.save()
+        messages.success(request, f"New tickets will be routed to {route.selected_user.full_name}.")
+        return redirect("ticket_intake_routing")
+    return render(request, "accounts/ticket_intake_routing.html", {"form": form, "route": route})
 
 
 @login_required

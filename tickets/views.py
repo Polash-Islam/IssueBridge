@@ -154,17 +154,29 @@ def _available_statuses(user, ticket):
         "ready-for-verification", "verification-failed",
     }:
         return WorkflowStatus.objects.none()
+    execution_statuses = {
+        "assigned", "in-progress", "blocked", "waiting-for-requester",
+        "waiting-for-meeting", "reopened",
+    }
+    if ticket.status.code in execution_statuses and ticket.current_assignee_id != user.pk:
+        return WorkflowStatus.objects.none()
     transitions = StatusTransition.objects.filter(from_status=ticket.status, is_active=True)
     assigned_worker = ticket.current_assignee_id == user.pk and ticket.status.code in {
         "assigned", "in-progress", "blocked", "waiting-for-requester",
         "waiting-for-meeting", "reopened",
     }
+    allow_requester_verification = assigned_worker and ticket.status.code == "in-progress"
     if not user.is_super_admin and not assigned_worker:
         if user.role_id:
             transitions = transitions.filter(allowed_roles=user.role)
         else:
             transitions = transitions.none()
-    return WorkflowStatus.objects.filter(transitions_to__in=transitions).distinct().order_by("sort_order")
+    available = WorkflowStatus.objects.filter(transitions_to__in=transitions)
+    if allow_requester_verification:
+        available = WorkflowStatus.objects.filter(
+            Q(transitions_to__in=transitions) | Q(code="ready-for-verification", is_active=True)
+        )
+    return available.distinct().order_by("sort_order")
 
 
 @login_required

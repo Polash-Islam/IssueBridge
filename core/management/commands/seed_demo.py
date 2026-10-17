@@ -2,16 +2,18 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import Role, User
+from accounts.reference_data import seed_account_reference_data
 from core.models import Division
 from communications.models import Meeting, MeetingHistory, MeetingParticipant, MeetingSequence, MeetingType, Notification
 from tickets.models import (
     Product, StatusTransition, Ticket, TicketAssignment, TicketCategory, TicketComment,
     TicketHistory, TicketNumberSequence, TicketPriority, WorkflowStatus,
 )
+from tickets.priority_utils import move_priorities_to_temporary_ranks
 
 
 class Command(BaseCommand):
@@ -25,9 +27,7 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        divisions = {}
-        for code, name in [("APR", "Audit Practice Review"), ("FRM", "Financial Reporting Monitoring"), ("ENF", "Enforcement"), ("IT", "Information Technology")]:
-            divisions[code], _ = Division.objects.update_or_create(code=code, defaults={"name": name, "is_active": True})
+        divisions = seed_account_reference_data()
 
         role_specs = [
             ("super-admin", "Super Admin", "GLOBAL"), ("director", "Director", "DIVISION"),
@@ -57,7 +57,8 @@ class Command(BaseCommand):
             code = name.lower().replace(" / ", "-").replace(" ", "-")
             categories[name], _ = TicketCategory.objects.update_or_create(code=code, defaults={"name": name, "is_active": True})
 
-        TicketPriority.objects.update(rank=10000 + F("rank"), is_active=False)
+        move_priorities_to_temporary_ranks()
+        TicketPriority.objects.update(is_active=False)
         for rank, (code, name, color) in enumerate([
             ("moderate", "Moderate", "#3d79b7"), ("high", "High", "#e18432"),
             ("urgent", "Urgent", "#dd5850"),
@@ -83,7 +84,17 @@ class Command(BaseCommand):
 
         all_roles = list(roles.values())
         intake_roles = [roles["super-admin"], roles["senior-it-consultant"]]
-        worker_roles = [roles["super-admin"], roles["officer"]]
+        intake_roles.extend(Role.objects.filter(
+            Q(division=divisions["IT"]) | Q(division__name__iexact="IT"),
+            is_division_director=True,
+        ))
+        worker_roles = list(Role.objects.filter(
+            code__in=["super-admin", "officer"]
+        ) | Role.objects.filter(name__in=[
+            "Junior IT Consultant", "Executive Officer", "Assistant Director",
+            "Standard Setting Officer", "Audit Practice Officer",
+            "Administrative Officer", "Intern",
+        ]))
         requester_roles = all_roles
         transitions = [
             ("new", "under-review", intake_roles, False),
@@ -95,6 +106,7 @@ class Command(BaseCommand):
             ("in-progress", "waiting-for-requester", worker_roles, True), ("waiting-for-requester", "in-progress", worker_roles, True),
             ("in-progress", "waiting-for-meeting", worker_roles, True), ("waiting-for-meeting", "in-progress", worker_roles, True),
             ("in-progress", "ready-for-it-verification", worker_roles, True),
+            ("in-progress", "ready-for-verification", worker_roles, False),
             ("ready-for-it-verification", "ready-for-verification", intake_roles, False),
             ("ready-for-it-verification", "in-progress", intake_roles, True),
             ("ready-for-verification", "completed", requester_roles, False),
@@ -108,12 +120,6 @@ class Command(BaseCommand):
                 defaults={"name": f"{statuses[source].name} to {statuses[target].name}", "requires_comment": requires_comment, "is_active": True},
             )
             transition.allowed_roles.set(allowed)
-        # Retire the former shortcut so requester verification can never bypass
-        # the Senior IT Consultant's technical check on existing installations.
-        StatusTransition.objects.filter(
-            from_status=statuses["in-progress"], to_status=statuses["ready-for-verification"],
-        ).update(is_active=False)
-
         product_specs = [("APR", "APR Software", "apr-software"), ("APR", "Other APR System", "other-apr-system"), ("FRM", "FRM Software", "frm-software"), ("FRM", "Other FRM System", "other-frm-system"), ("ENF", "Enforcement Systems", "enforcement-systems"), ("IT", "Internal IT Services", "internal-it-services")]
         products = {}
         for division_code, name, code in product_specs:
