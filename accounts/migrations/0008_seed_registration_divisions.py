@@ -36,10 +36,20 @@ def seed_registration_data(apps, schema_editor):
 
     divisions = {}
     for code, name in DIVISIONS:
-        division, _ = Division.objects.update_or_create(
-            code=code,
-            defaults={"name": name, "is_active": True},
-        )
+        # Older installs may already have this division under its name but
+        # with a different code. Looking up only by code makes
+        # update_or_create try to insert a second row and violate the unique
+        # name constraint.
+        division = Division.objects.filter(code=code).first()
+        if division is None:
+            division = Division.objects.filter(name=name).first()
+        if division is None:
+            division = Division(code=code, name=name)
+        else:
+            division.code = code
+            division.name = name
+        division.is_active = True
+        division.save()
         divisions[code] = division
 
     Division.objects.exclude(code__in=[code for code, _ in DIVISIONS]).update(is_active=False)
