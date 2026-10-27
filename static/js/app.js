@@ -9,6 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
         section.querySelectorAll("input, select, textarea, button").forEach((control) => {
           control.disabled = inactive;
         });
+        section.querySelectorAll(".request-mode-hint").forEach((hint) => {
+          hint.hidden = !inactive;
+        });
       });
       document.querySelectorAll(".intake-note [data-request-mode]").forEach((message) => {
         message.hidden = message.dataset.requestMode !== requestType.value;

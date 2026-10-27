@@ -233,11 +233,11 @@ class PageSmokeTests(TestCase):
         self.assertContains(page, "Division for this request")
         self.assertContains(
             page,
-            'data-request-mode="DIRECT" data-disabled-message="Choose Direct Request to select recipients." inert',
+            'data-request-mode="DIRECT" inert',
         )
         self.assertNotContains(
             page,
-            'data-request-mode="IT" data-disabled-message="Not needed for a Direct Request." inert',
+            'data-request-mode="IT" inert',
         )
         page = self.client.post(reverse("ticket_create"), {
             "request_type": Ticket.RequestType.DIRECT,
@@ -249,7 +249,7 @@ class PageSmokeTests(TestCase):
             page,
             'class="panel form-section request-mode-section request-mode-disabled" data-request-mode="IT"',
         )
-        self.assertContains(page, "Not needed for a Direct Request.")
+        self.assertContains(page, "Only needed for IT Support.")
         response = self.client.post(reverse("ticket_create"), {
             "request_type": Ticket.RequestType.DIRECT,
             "requesting_division": division.pk,
