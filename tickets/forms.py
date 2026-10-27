@@ -1,7 +1,9 @@
 from django import forms
+from django.db import models
 from django.utils import timezone
 
 from accounts.models import User
+from core.models import Division
 from .models import (
     Product, Ticket, TicketCategory, TicketComment, TicketPriority, TicketReview,
     TicketVerification, WorkflowStatus,
@@ -35,20 +37,42 @@ class RequesterChoiceField(forms.ModelChoiceField):
         full_name = " ".join(
             part.strip() for part in (user.first_name, user.last_name) if part and part.strip()
         )
+        if full_name and user.email:
+            return f"{full_name} ({user.email})"
         return full_name or user.email or user.username
 
+
+class RequesterMultipleChoiceField(forms.ModelMultipleChoiceField):
+    def label_from_instance(self, user):
+        full_name = " ".join(
+            part.strip() for part in (user.first_name, user.last_name) if part and part.strip()
+        )
+        if full_name and user.email:
+            return f"{full_name} ({user.email})"
+        return full_name or user.email or user.username
+
+
 class TicketCreateForm(forms.ModelForm):
-    requested_for = RequesterChoiceField(
+    request_type = forms.ChoiceField(
+        choices=Ticket.RequestType.choices, required=False, initial=Ticket.RequestType.IT,
+    )
+    assign_to = RequesterChoiceField(
+        queryset=User.objects.none(), required=False, label="Assign work to",
+    )
+    requesting_division = forms.ModelChoiceField(
+        queryset=Division.objects.none(), required=False, label="Division for this request",
+    )
+    recipients = RequesterMultipleChoiceField(
         queryset=User.objects.none(), required=False,
-        label="Requester / submit on behalf of",
-        help_text="The selected person will receive and finally verify this ticket.",
+        widget=forms.SelectMultiple(attrs={"size": 6}),
+        help_text="Every selected person must approve before this request is fully approved.",
     )
     attachments = MultipleFileField(required=False, help_text="PNG, JPG, PDF, Office, or ZIP. Maximum 10 MB each.")
 
     class Meta:
         model = Ticket
         fields = (
-            "title", "description", "product", "category", "priority",
+            "request_type", "title", "description", "product", "category", "priority",
             "expected_behavior", "actual_behavior",
             "browser_device", "additional_notes", "parent",
         )
@@ -68,18 +92,28 @@ class TicketCreateForm(forms.ModelForm):
         self.fields["product"].empty_label = "Select Product / System"
         self.fields["category"].empty_label = "Select Category"
         self.fields["priority"].empty_label = "Select Priority"
+        self.fields["product"].required = False
+        self.fields["category"].required = False
+        self.fields["priority"].required = False
         self.fields["parent"].queryset = Ticket.objects.none()
+        self.fields["requesting_division"].queryset = Division.objects.filter(is_active=True)
+        if user and user.division_id:
+            self.fields.pop("requesting_division")
+        if user and (user.is_super_admin or user.is_senior_it):
+            self.fields["assign_to"].queryset = User.objects.filter(is_active=True).exclude(
+                role__is_division_director=True,
+            ).select_related("division", "role").order_by("division__code", "first_name", "last_name")
+            self.fields["assign_to"].empty_label = "Select a responsible person"
+        else:
+            self.fields.pop("assign_to")
+        self.fields["recipients"].queryset = User.objects.filter(is_active=True).exclude(
+            pk=getattr(user, "pk", None),
+        ).select_related("division", "role").order_by(
+            "division__code", "first_name", "last_name",
+        )
         if user:
             from .access import visible_tickets_for
             self.fields["parent"].queryset = visible_tickets_for(user)
-            if user.is_super_admin or user.is_senior_it:
-                active_users = User.objects.filter(is_active=True).select_related(
-                    "division", "role",
-                ).order_by("division__code", "first_name", "last_name")
-                self.fields["requested_for"].queryset = active_users
-                self.fields["requested_for"].required = True
-            else:
-                self.fields.pop("requested_for")
         for name, field in self.fields.items():
             field.widget.attrs.setdefault("class", "form-control")
             if not field.widget.attrs.get("placeholder"):
@@ -87,13 +121,28 @@ class TicketCreateForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        requester = cleaned.get("requested_for") or self.user
-        self.requesting_division = requester.division if requester else None
+        if not cleaned.get("request_type"):
+            cleaned["request_type"] = Ticket.RequestType.IT
+        requester = self.user
+        if cleaned.get("request_type") == Ticket.RequestType.DIRECT:
+            recipients = cleaned.get("recipients", [])
+            if not recipients:
+                self.add_error("recipients", "Select at least one recipient.")
+            if requester and any(recipient.pk == requester.pk for recipient in recipients):
+                self.add_error("recipients", "The requester cannot also be a recipient.")
+        elif cleaned.get("request_type") == Ticket.RequestType.IT:
+            for name in ("product", "category", "priority"):
+                if not cleaned.get(name):
+                    self.add_error(name, "This field is required for IT support tickets.")
+        self.requesting_division = (
+            requester.division if requester and requester.division_id
+            else cleaned.get("requesting_division")
+        )
         if not self.requesting_division:
-            raise forms.ValidationError("Select an account with a Division before creating a ticket.")
-        product = cleaned.get("product")
-        if product and product.division_id != self.requesting_division.pk:
-            self.add_error("product", "Choose a Product / System from the requester's Division.")
+            if "requesting_division" in self.fields:
+                self.add_error("requesting_division", "Select the division this request belongs to.")
+            else:
+                raise forms.ValidationError("Your account must be assigned to a Division before creating a ticket.")
         return cleaned
 
     def save(self, commit=True):
@@ -105,6 +154,41 @@ class TicketCreateForm(forms.ModelForm):
         return ticket
 
 
+class DirectRequestResponseForm(forms.Form):
+    class Action(models.TextChoices):
+        APPROVE = "APPROVE", "Approve"
+        DECLINE = "DECLINE", "Decline"
+        DISCUSS = "DISCUSS", "Request a discussion"
+        MEETING = "MEETING", "Request a meeting"
+
+    action = forms.ChoiceField(choices=Action.choices)
+    deadline = forms.DateTimeField(
+        required=False,
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M"],
+    )
+    reason = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+    note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+
+    def clean(self):
+        cleaned = super().clean()
+        action = cleaned.get("action")
+        if action == self.Action.APPROVE:
+            deadline = cleaned.get("deadline")
+            if not deadline:
+                self.add_error("deadline", "Provide the deadline you can commit to.")
+            elif deadline <= timezone.now():
+                self.add_error("deadline", "Choose a future deadline.")
+        elif action == self.Action.DECLINE and not cleaned.get("reason", "").strip():
+            self.add_error("reason", "A reason is required when declining.")
+        return cleaned
+
+
 class CommentForm(forms.ModelForm):
     attachments = MultipleFileField(required=False)
 
@@ -113,16 +197,20 @@ class CommentForm(forms.ModelForm):
         fields = ("body", "visibility")
         widgets = {"body": forms.Textarea(attrs={"rows": 3, "placeholder": "Write an update or reply…"})}
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, user=None, allow_internal=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.allow_internal = (
+            bool(user and (user.is_super_admin or user.is_it_user))
+            if allow_internal is None else allow_internal
+        )
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
-        if user and not (user.is_super_admin or user.is_it_user):
+        if not self.allow_internal:
             self.fields["visibility"].choices = [(TicketComment.Visibility.PUBLIC, "Requester visible")]
 
     def clean_visibility(self):
         visibility = self.cleaned_data["visibility"]
-        if visibility == TicketComment.Visibility.INTERNAL and self.user and not (self.user.is_super_admin or self.user.is_it_user):
+        if visibility == TicketComment.Visibility.INTERNAL and not self.allow_internal:
             raise forms.ValidationError("Internal comments are restricted to IT.")
         return visibility
 
@@ -155,6 +243,24 @@ class AssignmentForm(forms.Form):
         self.fields["assigned_to"].empty_label = "Select a responsible person"
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")
+
+
+class DeadlineExtensionForm(forms.Form):
+    deadline = forms.DateTimeField(
+        label="New deadline",
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M"],
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["deadline"].widget.attrs.setdefault("class", "form-control")
+
+    def clean_deadline(self):
+        deadline = self.cleaned_data["deadline"]
+        if deadline <= timezone.now():
+            raise forms.ValidationError("Choose a future date and time.")
+        return deadline
 
 
 class TransitionForm(forms.Form):

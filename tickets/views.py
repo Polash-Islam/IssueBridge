@@ -12,12 +12,14 @@ from .access import (
     can_view_internal_comments, visible_tickets_for,
 )
 from .forms import (
-    AssignmentForm, CommentForm, ReviewForm, TechnicalVerificationForm, TicketCreateForm,
+    AssignmentForm, CommentForm, DeadlineExtensionForm, DirectRequestResponseForm, ReviewForm,
+    TechnicalVerificationForm, TicketCreateForm,
     TransitionForm, VerificationForm,
 )
-from .models import StatusTransition, TicketAttachment, TicketPriority, WorkflowStatus
+from .models import StatusTransition, Ticket, TicketAttachment, TicketPriority, WorkflowStatus
 from .services import (
-    assign_ticket, create_ticket, record_history, review_ticket, technical_verify_ticket,
+    assign_ticket, create_ticket, extend_assignment_deadline, record_history, respond_to_direct_request,
+    review_ticket, technical_verify_ticket,
     transition_ticket, verify_ticket,
 )
 
@@ -34,7 +36,7 @@ def _error_message(exc):
 
 @login_required
 def ticket_list(request):
-    tickets = visible_tickets_for(request.user)
+    tickets = visible_tickets_for(request.user).prefetch_related("recipient_records__user")
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     priority = request.GET.get("priority", "")
@@ -70,6 +72,14 @@ def ticket_list(request):
     elif scope == "overdue":
         from django.utils import timezone
         tickets = tickets.filter(deadline__lt=timezone.now()).exclude(status__kind__in=["RESOLVED", "CLOSED"])
+    elif scope == "direct_review":
+        tickets = tickets.filter(
+            request_type=Ticket.RequestType.DIRECT, recipient_records__user=request.user,
+            recipient_records__decision__in=[
+                "PENDING", "DISCUSSION", "MEETING",
+            ],
+        ).distinct()
+        tickets = tickets.exclude(recipient_records__decision="DECLINED")
     context = {
         "tickets": tickets, "q": q, "selected_status": status, "selected_priority": priority, "scope": scope,
         "statuses": WorkflowStatus.objects.filter(is_active=True), "priorities": TicketPriority.objects.filter(is_active=True),
@@ -79,7 +89,7 @@ def ticket_list(request):
 
 @login_required
 def kanban_board(request):
-    tickets = visible_tickets_for(request.user)
+    tickets = visible_tickets_for(request.user).filter(request_type=Ticket.RequestType.IT)
     q = request.GET.get("q", "").strip()
     division = request.GET.get("division", "")
     priority = request.GET.get("priority", "")
@@ -138,7 +148,9 @@ def ticket_create(request):
         except ValidationError as exc:
             form.add_error(None, exc)
             return render(request, "tickets/ticket_form.html", {"form": form})
-        if ticket.current_assignee:
+        if ticket.request_type == Ticket.RequestType.DIRECT:
+            messages.success(request, f"{ticket.ticket_number} was sent to the selected recipients for approval.")
+        elif ticket.current_assignee:
             messages.success(request, f"{ticket.ticket_number} was created and assigned to {ticket.current_assignee.full_name}.")
         else:
             messages.success(request, f"{ticket.ticket_number} was created and sent to IT intake.")
@@ -151,19 +163,19 @@ def _available_statuses(user, ticket):
     # their mandatory decision records cannot be bypassed through a generic POST.
     if ticket.status.code in {
         "new", "under-review", "validated", "ready-for-it-verification",
-        "ready-for-verification", "verification-failed",
+        "ready-for-verification",
     }:
         return WorkflowStatus.objects.none()
     execution_statuses = {
         "assigned", "in-progress", "blocked", "waiting-for-requester",
-        "waiting-for-meeting", "reopened",
+        "waiting-for-meeting", "reopened", "verification-failed",
     }
     if ticket.status.code in execution_statuses and ticket.current_assignee_id != user.pk:
         return WorkflowStatus.objects.none()
     transitions = StatusTransition.objects.filter(from_status=ticket.status, is_active=True)
     assigned_worker = ticket.current_assignee_id == user.pk and ticket.status.code in {
         "assigned", "in-progress", "blocked", "waiting-for-requester",
-        "waiting-for-meeting", "reopened",
+        "waiting-for-meeting", "reopened", "verification-failed",
     }
     allow_requester_verification = assigned_worker and ticket.status.code == "in-progress"
     if not user.is_super_admin and not assigned_worker:
@@ -175,6 +187,10 @@ def _available_statuses(user, ticket):
     if allow_requester_verification:
         available = WorkflowStatus.objects.filter(
             Q(transitions_to__in=transitions) | Q(code="ready-for-verification", is_active=True)
+        )
+    elif ticket.status.code == "verification-failed" and assigned_worker:
+        available = WorkflowStatus.objects.filter(
+            Q(transitions_to__in=transitions) | Q(code="in-progress", is_active=True)
         )
     return available.distinct().order_by("sort_order")
 
@@ -191,24 +207,66 @@ def ticket_detail(request, number):
     for event in history:
         event.related_comment = comments_by_id.get(event.new_value.get("comment_id"))
     available_statuses = _available_statuses(request.user, ticket)
+    is_it_ticket = ticket.request_type == Ticket.RequestType.IT
+    recipient_records = list(ticket.recipient_records.select_related("user"))
+    my_recipient_record = next(
+        (recipient for recipient in recipient_records if recipient.user_id == request.user.pk), None,
+    )
+    direct_status = ticket.direct_request_status
     context = {
         "ticket": ticket,
         "comments": comments,
         "history": history,
-        "comment_form": CommentForm(user=request.user),
+        "comment_form": CommentForm(
+            user=request.user, allow_internal=is_it_ticket and can_view_internal_comments(request.user),
+        ),
         "review_form": ReviewForm(),
         "assignment_form": AssignmentForm(),
+        "deadline_extension_form": DeadlineExtensionForm(),
         "transition_form": TransitionForm(queryset=available_statuses),
         "technical_verification_form": TechnicalVerificationForm(),
         "verification_form": VerificationForm(),
-        "can_review": can_review_ticket(request.user) and ticket.status.code in {"new", "under-review"},
-        "can_assign": can_assign_ticket(request.user) and ticket.status.code in {"validated", "assigned", "in-progress", "reopened"},
-        "can_technical_verify": can_technical_verify_ticket(request.user, ticket) and ticket.status.code == "ready-for-it-verification",
-        "can_verify": can_verify_ticket(request.user, ticket) and ticket.status.code == "ready-for-verification",
-        "has_transitions": available_statuses.exists(),
+        "can_review": is_it_ticket and can_review_ticket(request.user) and ticket.status.code in {"new", "under-review"},
+        "can_assign": is_it_ticket and can_assign_ticket(request.user) and ticket.status.code in {"validated", "assigned", "in-progress", "reopened"},
+        "can_technical_verify": is_it_ticket and can_technical_verify_ticket(request.user, ticket) and ticket.status.code == "ready-for-it-verification",
+        "can_verify": is_it_ticket and can_verify_ticket(request.user, ticket) and ticket.status.code == "ready-for-verification",
+        "has_transitions": is_it_ticket and available_statuses.exists(),
         "active_assignment": ticket.assignments.filter(is_active=True).select_related("assigned_by", "assigned_to").first(),
+        "recipient_records": recipient_records,
+        "my_recipient_record": my_recipient_record,
+        "direct_status": direct_status,
+        "can_respond_to_direct_request": bool(
+            not is_it_ticket and my_recipient_record
+            and my_recipient_record.decision not in {"APPROVED", "DECLINED"}
+            and direct_status not in {"Approved by everyone", "Declined"}
+        ),
+        "direct_response_form": DirectRequestResponseForm(),
     }
+    assignment = context["active_assignment"]
+    context["can_extend_deadline"] = bool(
+        ticket.is_overdue and assignment and assignment.assigned_by_id == request.user.pk
+    )
     return render(request, "tickets/ticket_detail.html", context)
+
+
+@login_required
+def ticket_direct_response(request, number):
+    if request.method != "POST":
+        raise Http404
+    ticket = _ticket_or_404(request.user, number)
+    form = DirectRequestResponseForm(request.POST)
+    if form.is_valid():
+        try:
+            respond_to_direct_request(
+                ticket=ticket, actor=request.user, request=request, **form.cleaned_data,
+            )
+            messages.success(request, "Your response to the direct request was recorded.")
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, _error_message(exc))
+    else:
+        errors = " ".join(message for field_errors in form.errors.values() for message in field_errors)
+        messages.error(request, errors or "Please correct your response.")
+    return redirect("ticket_detail", number=number)
 
 
 @login_required
@@ -231,7 +289,10 @@ def comment_add(request, number):
     if request.method != "POST":
         raise Http404
     ticket = _ticket_or_404(request.user, number)
-    form = CommentForm(request.POST, request.FILES, user=request.user)
+    form = CommentForm(
+        request.POST, request.FILES, user=request.user,
+        allow_internal=ticket.request_type == Ticket.RequestType.IT and can_view_internal_comments(request.user),
+    )
     if form.is_valid():
         comment = form.save(commit=False)
         comment.ticket = ticket
@@ -253,6 +314,10 @@ def comment_add(request, number):
         if form.cleaned_data["visibility"] == "PUBLIC":
             recipients.append(ticket.requester)
             recipients.extend(ticket.watchers.all())
+            if ticket.request_type == Ticket.RequestType.DIRECT:
+                recipients.extend(
+                    record.user for record in ticket.recipient_records.select_related("user")
+                )
         notify_users(recipients, kind=Notification.Kind.COMMENT, verb=f"commented on {ticket.ticket_number}", actor=request.user, ticket=ticket)
         messages.success(request, "Comment added.")
     else:
@@ -290,6 +355,27 @@ def ticket_assign(request, number):
             messages.error(request, _error_message(exc))
     else:
         messages.error(request, "Please correct the assignment details.")
+    return redirect("ticket_detail", number=number)
+
+
+@login_required
+def ticket_deadline_extend(request, number):
+    if request.method != "POST":
+        raise Http404
+    ticket = _ticket_or_404(request.user, number)
+    form = DeadlineExtensionForm(request.POST)
+    if form.is_valid():
+        try:
+            assignment = extend_assignment_deadline(
+                ticket=ticket, actor=request.user,
+                new_deadline=form.cleaned_data["deadline"], request=request,
+            )
+            messages.success(request, f"Deadline updated to {assignment.deadline:%d %b %Y, %H:%M}.")
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, _error_message(exc))
+    else:
+        errors = " ".join(message for messages_list in form.errors.values() for message in messages_list)
+        messages.error(request, "Please choose a valid future deadline. " + errors)
     return redirect("ticket_detail", number=number)
 
 

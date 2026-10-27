@@ -11,7 +11,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from tickets.access import visible_tickets_for
-from tickets.models import TicketPriority, WorkflowStatus
+from tickets.models import Ticket, TicketPriority, WorkflowStatus
 from core.models import Division
 from .forms import ReportDateFilterForm
 
@@ -41,7 +41,11 @@ def dashboard(request):
     max_division = max([row["total"] for row in division_counts], default=1)
     for row in division_counts:
         row["percent"] = round(row["total"] / max_division * 100)
-    priority_counts = list(tickets.values("priority__name", "priority__color").annotate(total=Count("id")).order_by("-priority__rank"))
+    priority_counts = list(
+        tickets.filter(request_type=Ticket.RequestType.IT)
+        .values("priority__name", "priority__color")
+        .annotate(total=Count("id")).order_by("-priority__rank")
+    )
     context = {
         "metrics": metrics,
         "full_dashboard": full_dashboard,
@@ -107,7 +111,9 @@ def reports(request):
             .annotate(total=Count("id"), open=Count("id", filter=~Q(status__kind__in=["RESOLVED", "CLOSED"])))
             .order_by("-open", "-total", "current_assignee__username")
         ),
-        "report_tickets": tickets.select_related("identified_by", "reviewed_by").order_by("-created_at", "-pk"),
+        "report_tickets": tickets.select_related(
+            "identified_by", "reviewed_by",
+        ).prefetch_related("recipient_records__user").order_by("-created_at", "-pk"),
         "division_options": Division.objects.filter(is_active=True), "statuses": WorkflowStatus.objects.filter(is_active=True),
         "priorities": TicketPriority.objects.filter(is_active=True), "filters": request.GET,
     }
@@ -121,8 +127,12 @@ def _report_rows(tickets, detailed=False):
         yield ["Ticket ID", "Title", "Division", "Product", "Category", "Priority", "Status", "Requester", "Assignee", "Created", "Deadline", "Completed"]
     for ticket in tickets.select_related("requesting_division", "product", "category", "priority", "status", "requester", "current_assignee", "identified_by", "reviewed_by"):
         row = [
-            ticket.ticket_number, ticket.title, ticket.requesting_division.name, ticket.product.name,
-            ticket.category.name, ticket.priority.name, ticket.status.name, ticket.requester.full_name,
+            ticket.ticket_number, ticket.title, ticket.requesting_division.name,
+            ticket.product.name if ticket.product else "Direct request",
+            ticket.category.name if ticket.category else "",
+            ticket.priority.name if ticket.priority else "",
+            ticket.direct_request_status if ticket.request_type == Ticket.RequestType.DIRECT else ticket.status.name,
+            ticket.requester.full_name,
             ticket.current_assignee.full_name if ticket.current_assignee else "",
             timezone.localtime(ticket.created_at).strftime("%Y-%m-%d %H:%M"),
             timezone.localtime(ticket.deadline).strftime("%Y-%m-%d %H:%M") if ticket.deadline else "",

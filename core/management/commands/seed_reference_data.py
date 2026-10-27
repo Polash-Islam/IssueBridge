@@ -37,7 +37,7 @@ STATUSES = [
     ("waiting-for-meeting", "Waiting for Meeting", "WAITING", "#9c6bb6"),
     ("ready-for-it-verification", "Ready for IT Verification", "WAITING", "#4868c7"),
     ("ready-for-verification", "Ready for Verification", "WAITING", "#7656d8"),
-    ("verification-failed", "Verification Failed", "ACTIVE", "#d15151"),
+    ("verification-failed", "Problem Still Exists", "ACTIVE", "#d15151"),
     ("reopened", "Reopened", "ACTIVE", "#d05d52"),
     ("completed", "Completed", "RESOLVED", "#21835f"),
     ("closed", "Closed", "CLOSED", "#526575"),
@@ -74,7 +74,7 @@ TRANSITIONS = [
     ("ready-for-it-verification", "in-progress", "intake", True),
     ("ready-for-verification", "completed", "requester", False),
     ("ready-for-verification", "verification-failed", "requester", True),
-    ("verification-failed", "in-progress", "requester", False),
+    ("verification-failed", "in-progress", "worker", False),
     ("reopened", "in-progress", "worker", False),
     ("completed", "closed", "closer", False),
 ]

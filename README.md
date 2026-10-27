@@ -2,7 +2,7 @@
 
 A professional Django/PostgreSQL service workspace for the Financial Reporting Council.
 The implemented release includes authentication, scoped user management, role-aware
-dashboards, ticket intake, IT review, assignment, guarded workflow transitions, requester
+dashboards, ticket intake, direct multi-recipient approval requests, IT review, assignment, guarded workflow transitions, requester
 verification, public and internal comments, attachments, and immutable history. It also
 includes a drag-and-drop Kanban board, meeting workflows, in-app notifications, a combined
 deadline/meeting calendar, and permission-scoped reports with CSV, Excel, and PDF exports.
@@ -51,6 +51,7 @@ using the project outside a local development environment.
 ## Implemented modules
 
 - Ticket service desk with configurable workflow and human-friendly IDs
+- Direct requests that notify only selected recipients, require unanimous approval with individual deadlines, and support decline, discussion, or meeting requests
 - Two-stage resolution approval: Senior IT technical verification, then requester confirmation
 - Hierarchical account management, user profiles, self-service profile/password edits, and profile photos
 - Public Officer registration with division-Director approval and a one-day pending-account expiry

@@ -18,7 +18,8 @@ def pdf_report_rows(tickets):
             timezone.localtime(ticket.created_at).strftime("%Y-%m-%d %H:%M"),
             timezone.localtime(ticket.updated_at).strftime("%Y-%m-%d %H:%M"),
             timezone.localtime(ticket.deadline).strftime("%Y-%m-%d %H:%M") if ticket.deadline else "No deadline",
-            ticket.status.name, ticket.overdue_days,
+            ticket.direct_request_status if ticket.request_type == "DIRECT" else ticket.status.name,
+            ticket.overdue_days,
         ]
 
 

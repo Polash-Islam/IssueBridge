@@ -39,10 +39,10 @@
         <tr>
           <td><a class="ticket-cell" href="{{ ticket.get_absolute_url }}"><strong>{{ ticket.ticket_number }}</strong><span title="{{ ticket.title }}">{{ ticket.title }}</span></a></td>
           <td>{{ ticket.requesting_division.name }}</td>
-          <td>{{ ticket.product.name }}</td><td>{{ ticket.category.name }}</td>
-          <td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{{ ticket.status.name }}</span></td>
+          <td>{% if ticket.request_type == 'DIRECT' %}Direct request{% else %}{{ ticket.product.name }}{% endif %}</td><td>{{ ticket.category.name }}</td>
+          <td><span class="status-badge" style="--badge:{{ ticket.status.color }}">{% if ticket.request_type == 'DIRECT' %}{{ ticket.direct_request_status }}{% else %}{{ ticket.status.name }}{% endif %}</span></td>
           <td class="{% if ticket.is_overdue %}danger-text{% endif %}">{{ ticket.overdue_days }}</td>
-          <td><span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span></td>
+          <td>{% if ticket.priority %}<span class="priority-badge"><i style="background:{{ ticket.priority.color }}"></i>{{ ticket.priority.name }}</span>{% else %}—{% endif %}</td>
           <td><span class="stacked"><strong>{{ ticket.requester.full_name }}</strong><small>{{ ticket.requester.email }}</small></span></td>
           <td>{{ ticket.identified_by.full_name }}</td>
           <td>{% if ticket.current_assignee %}<span class="stacked"><strong>{{ ticket.current_assignee.full_name }}</strong><small>{{ ticket.current_assignee.email }}</small></span>{% else %}Unassigned{% endif %}</td>

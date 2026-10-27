@@ -6,7 +6,7 @@ from django.utils import timezone
 from .access import can_assign_ticket, can_review_ticket, can_technical_verify_ticket, can_verify_ticket, is_ticket_intake_user
 from .models import (
     StatusTransition, Ticket, TicketAssignment, TicketHistory, TicketNumberSequence,
-    TicketIntakeRoute, TicketReview, TicketTechnicalVerification, TicketVerification, WorkflowStatus,
+    TicketIntakeRoute, TicketRecipient, TicketReview, TicketTechnicalVerification, TicketVerification, WorkflowStatus,
 )
 
 
@@ -26,9 +26,11 @@ def record_history(ticket, actor, action, description, request=None, previous=No
 
 @transaction.atomic
 def create_ticket(*, form, user, files, request=None):
-    requester = form.cleaned_data.get("requested_for") or user
+    requester = user
     division = form.requesting_division
-    assigned_to = form.cleaned_data.get("assign_to")
+    request_type = form.cleaned_data["request_type"]
+    direct_recipients = list(form.cleaned_data.get("recipients", []))
+    assigned_to = form.cleaned_data.get("assign_to") if request_type == Ticket.RequestType.IT else None
     status_code = "assigned" if assigned_to else "new"
     try:
         status = WorkflowStatus.objects.get(code=status_code, is_active=True)
@@ -45,15 +47,23 @@ def create_ticket(*, form, user, files, request=None):
     ticket.requester = requester
     ticket.identified_by = user
     ticket.status = status
+    ticket.request_type = request_type
     if assigned_to:
         ticket.current_assignee = assigned_to
         ticket.reviewed_by = user
     ticket.save()
     ticket.watchers.add(requester, user)
-    intake_route = TicketIntakeRoute.objects.filter(
-        division__code="IT",
-    ).prefetch_related("selected_users").first()
-    if not assigned_to and intake_route:
+    if request_type == Ticket.RequestType.DIRECT:
+        TicketRecipient.objects.bulk_create([
+            TicketRecipient(ticket=ticket, user=recipient)
+            for recipient in direct_recipients
+        ])
+    intake_route = None
+    if request_type == Ticket.RequestType.IT:
+        intake_route = TicketIntakeRoute.objects.filter(
+            division__code="IT",
+        ).prefetch_related("selected_users").first()
+    if request_type == Ticket.RequestType.IT and not assigned_to and intake_route:
         intake_users = list(intake_route.selected_users.filter(is_active=True))
         if intake_users:
             ticket.watchers.add(*intake_users)
@@ -63,8 +73,6 @@ def create_ticket(*, form, user, files, request=None):
             file_size=uploaded.size, uploaded_by=user,
         )
     description = f"Ticket created by {user.full_name}"
-    if requester != user:
-        description += f" on behalf of {requester.full_name}"
     record_history(
         ticket, user, "TICKET_CREATED", description, request,
         new={"status": status.name, "requester": requester.full_name},
@@ -87,7 +95,12 @@ def create_ticket(*, form, user, files, request=None):
     from accounts.models import User
     from communications.models import Notification
     from communications.services import notify_users
-    if assigned_to:
+    if request_type == Ticket.RequestType.DIRECT:
+        notify_users(
+            direct_recipients, kind=Notification.Kind.TICKET_CREATED,
+            verb=f"requested your approval for {ticket.ticket_number}", actor=user, ticket=ticket,
+        )
+    elif assigned_to:
         notify_users(
             [assigned_to], kind=Notification.Kind.ASSIGNED,
             verb=f"assigned {ticket.ticket_number} to you", actor=user, ticket=ticket,
@@ -106,12 +119,69 @@ def create_ticket(*, form, user, files, request=None):
                 Q(is_superuser=True) | Q(role__code__in=["super-admin", "senior-it-consultant"]),
             )
         notify_users(intake_users, kind=Notification.Kind.TICKET_CREATED, verb=f"created {ticket.ticket_number}", actor=user, ticket=ticket)
-    if requester != user:
-        notify_users(
-            [requester], kind=Notification.Kind.TICKET_CREATED,
-            verb=f"created {ticket.ticket_number} on your behalf", actor=user, ticket=ticket,
-        )
     return ticket
+
+
+@transaction.atomic
+def respond_to_direct_request(*, ticket, actor, action, deadline=None, reason="", note="", request=None):
+    if ticket.request_type != Ticket.RequestType.DIRECT:
+        raise PermissionDenied("This action is only available for direct requests.")
+    recipient = TicketRecipient.objects.select_for_update().filter(
+        ticket=ticket, user=actor,
+    ).first()
+    if not recipient:
+        raise PermissionDenied("Only selected recipients can respond to this request.")
+    if recipient.decision in {TicketRecipient.Decision.APPROVED, TicketRecipient.Decision.DECLINED}:
+        raise ValidationError("You have already submitted your final decision.")
+
+    responses = list(TicketRecipient.objects.select_for_update().filter(ticket=ticket))
+    if any(item.decision == TicketRecipient.Decision.DECLINED for item in responses) or all(
+        item.decision == TicketRecipient.Decision.APPROVED for item in responses
+    ):
+        raise ValidationError("This direct request has already reached a final decision.")
+    if action not in {
+        "APPROVE", "DECLINE", "DISCUSS", "MEETING",
+    }:
+        raise ValidationError("Choose a valid response.")
+    if action == "APPROVE" and (not deadline or deadline <= timezone.now()):
+        raise ValidationError("Choose a future deadline when approving.")
+    if action == "DECLINE" and not reason.strip():
+        raise ValidationError("A reason is required when declining.")
+
+    decision_by_action = {
+        "APPROVE": TicketRecipient.Decision.APPROVED,
+        "DECLINE": TicketRecipient.Decision.DECLINED,
+        "DISCUSS": TicketRecipient.Decision.DISCUSSION,
+        "MEETING": TicketRecipient.Decision.MEETING,
+    }
+    recipient.decision = decision_by_action[action]
+    recipient.deadline = deadline if action == "APPROVE" else None
+    recipient.reason = reason.strip() if action == "DECLINE" else ""
+    recipient.note = note.strip()
+    recipient.responded_at = timezone.now()
+    recipient.save(update_fields=["decision", "deadline", "reason", "note", "responded_at"])
+
+    if action == "APPROVE":
+        description = f"{actor.full_name} approved with a deadline of {deadline:%d %b %Y, %H:%M}"
+    elif action == "DECLINE":
+        description = f"{actor.full_name} declined: {reason.strip()}"
+    elif action == "DISCUSS":
+        description = f"{actor.full_name} requested a discussion"
+    else:
+        description = f"{actor.full_name} requested a meeting"
+    record_history(
+        ticket, actor, f"DIRECT_REQUEST_{action}", description, request,
+        new={"decision": recipient.get_decision_display(), "deadline": deadline.isoformat() if deadline else None,
+             "reason": recipient.reason, "note": recipient.note},
+    )
+    from communications.models import Notification
+    from communications.services import notify_users
+    notify_users(
+        [ticket.requester, *(item.user for item in responses)],
+        kind=Notification.Kind.STATUS, verb=f"responded to {ticket.ticket_number}: {description}",
+        actor=actor, ticket=ticket,
+    )
+    return recipient
 
 
 def _role_can_transition(user, transition):
@@ -122,14 +192,20 @@ def _role_can_transition(user, transition):
     return transition.allowed_roles.filter(pk=user.role_id).exists()
 
 
+def _require_it_ticket(ticket):
+    if ticket.request_type != Ticket.RequestType.IT:
+        raise PermissionDenied("IT workflow actions are not available for direct requests.")
+
+
 @transaction.atomic
 def transition_ticket(*, ticket, to_status, actor, comment="", request=None):
+    _require_it_ticket(ticket)
     transition = StatusTransition.objects.filter(
         from_status=ticket.status, to_status=to_status, is_active=True
     ).prefetch_related("allowed_roles").first()
     execution_statuses = {
         "assigned", "in-progress", "blocked", "waiting-for-requester",
-        "waiting-for-meeting", "reopened",
+        "waiting-for-meeting", "reopened", "verification-failed",
     }
     assigned_worker = (
         ticket.current_assignee_id == actor.pk and ticket.status.code in execution_statuses
@@ -137,6 +213,11 @@ def transition_ticket(*, ticket, to_status, actor, comment="", request=None):
     requester_verification_handoff = (
         assigned_worker and ticket.status.code == "in-progress"
         and to_status.code == "ready-for-verification"
+    )
+    verification_resume = (
+        ticket.status.code == "verification-failed"
+        and to_status.code == "in-progress"
+        and assigned_worker
     )
     if ticket.status.code in execution_statuses and not assigned_worker:
         raise PermissionDenied("Only the assigned person can update this task's status.")
@@ -147,9 +228,9 @@ def transition_ticket(*, ticket, to_status, actor, comment="", request=None):
         })
         or (ticket.status.code == "validated" and to_status.code == "assigned")
     )
-    if (not transition and not requester_verification_handoff) or (
+    if (not transition and not requester_verification_handoff and not verification_resume) or (
         transition and not _role_can_transition(actor, transition)
-        and not assigned_worker and not intake_transition
+        and not assigned_worker and not intake_transition and not verification_resume
     ):
         raise PermissionDenied("You are not permitted to make this status change.")
     if actor.role_code == "officer" and ticket.status.code in execution_statuses and ticket.current_assignee_id != actor.pk:
@@ -191,6 +272,7 @@ def transition_ticket(*, ticket, to_status, actor, comment="", request=None):
 
 @transaction.atomic
 def review_ticket(*, ticket, actor, decision, reason, request=None):
+    _require_it_ticket(ticket)
     if not can_review_ticket(actor):
         raise PermissionDenied
     if decision != TicketReview.Decision.VALID and not reason.strip():
@@ -215,6 +297,7 @@ def review_ticket(*, ticket, actor, decision, reason, request=None):
 
 @transaction.atomic
 def assign_ticket(*, ticket, actor, assigned_to, task_description, technical_instructions="", expected_output="", additional_notes="", deadline=None, request=None):
+    _require_it_ticket(ticket)
     if not can_assign_ticket(actor):
         raise PermissionDenied
     if not assigned_to.is_active:
@@ -246,7 +329,41 @@ def assign_ticket(*, ticket, actor, assigned_to, task_description, technical_ins
 
 
 @transaction.atomic
+def extend_assignment_deadline(*, ticket, actor, new_deadline, request=None):
+    _require_it_ticket(ticket)
+    assignment = TicketAssignment.objects.select_for_update().filter(
+        ticket=ticket, is_active=True,
+    ).select_related("assigned_by", "assigned_to").first()
+    if not assignment or assignment.assigned_by_id != actor.pk:
+        raise PermissionDenied("Only the person who assigned this task can change its deadline.")
+    if not ticket.is_overdue:
+        raise ValidationError("The deadline can only be changed after it has passed.")
+    if new_deadline <= timezone.now():
+        raise ValidationError("Choose a new deadline in the future.")
+
+    previous_deadline = ticket.deadline
+    assignment.deadline = new_deadline
+    assignment.save(update_fields=["deadline"])
+    ticket.deadline = new_deadline
+    ticket.save(update_fields=["deadline", "updated_at"])
+    record_history(
+        ticket, actor, "DEADLINE_EXTENDED", f"Deadline changed to {new_deadline:%d %b %Y, %H:%M}", request,
+        previous={"deadline": previous_deadline.isoformat() if previous_deadline else None},
+        new={"deadline": new_deadline.isoformat()},
+    )
+    from communications.models import Notification
+    from communications.services import notify_users
+    notify_users(
+        [assignment.assigned_to], kind=Notification.Kind.STATUS,
+        verb=f"changed the deadline for {ticket.ticket_number} to {new_deadline:%d %b %Y, %H:%M}",
+        actor=actor, ticket=ticket,
+    )
+    return assignment
+
+
+@transaction.atomic
 def verify_ticket(*, ticket, actor, decision, reason="", request=None):
+    _require_it_ticket(ticket)
     if not can_verify_ticket(actor, ticket) or ticket.status.code != "ready-for-verification":
         raise PermissionDenied
     if decision == TicketVerification.Decision.FAILED and not reason.strip():
@@ -255,11 +372,6 @@ def verify_ticket(*, ticket, actor, decision, reason="", request=None):
     target_code = "completed" if decision == TicketVerification.Decision.VERIFIED else "verification-failed"
     target = WorkflowStatus.objects.get(code=target_code)
     transition_ticket(ticket=ticket, to_status=target, actor=actor, comment=reason, request=request)
-    if decision == TicketVerification.Decision.FAILED:
-        # A failed requester verification reopens work immediately. Keep this
-        # transition tied to the requester's verification action so overdue
-        # tickets also acquire the actual In Progress status.
-        transition_ticket(ticket=ticket, to_status=WorkflowStatus.objects.get(code="in-progress"), actor=actor, request=request)
     record_history(ticket, actor, "VERIFICATION_SUBMITTED", verification.get_decision_display(), request, new={"decision": decision, "reason": reason})
     from communications.models import Notification
     from communications.services import notify_users
@@ -274,6 +386,7 @@ def verify_ticket(*, ticket, actor, decision, reason="", request=None):
 
 @transaction.atomic
 def technical_verify_ticket(*, ticket, actor, decision, reason="", request=None):
+    _require_it_ticket(ticket)
     if not can_technical_verify_ticket(actor, ticket) or ticket.status.code != "ready-for-it-verification":
         raise PermissionDenied
     if decision == TicketTechnicalVerification.Decision.RETURNED and not reason.strip():

@@ -35,11 +35,12 @@ PostgreSQL is the default runtime database. SQLite can be enabled only with
 Division 1---* User *---1 Role
 Division 1---* Product
 
-Division 1---* Ticket *---1 Product
+Division 1---* Ticket *---0..1 Product
 User     1---* Ticket (requester)
-Category 1---* Ticket
-Priority 1---* Ticket
+Category 1---* Ticket (IT support)
+Priority 1---* Ticket (IT support)
 WorkflowStatus 1---* Ticket
+Ticket 1---* TicketRecipient *---1 User
 
 WorkflowStatus 1---* StatusTransition *---1 WorkflowStatus
 Role *---* StatusTransition (roles permitted to perform it)
@@ -59,6 +60,13 @@ Important integrity rules:
 - Ticket status is a foreign key to configurable workflow data.
 - Assignments keep start/end timestamps, so reassignment never destroys history.
 - Each material mutation writes a `TicketHistory` row in the same transaction.
+- Direct requests have no product, category, or priority; selected recipients respond
+  individually through `TicketRecipient` records.
+- Direct requests are visible to their requester and selected recipients, not the
+  general IT intake. A direct request is approved only when every recipient approves;
+  each approval includes its own committed deadline. A decline requires a reason.
+- Recipients can request a discussion or meeting; those responses leave the approval
+  pending until the recipient submits a final decision.
 - Normal users cannot update or delete history records through the application.
 - Indexed fields cover ticket number, requester division, status, assignee, deadline,
   created time, and search/filter dimensions.
@@ -94,6 +102,12 @@ NEW -> UNDER REVIEW
                            -> READY FOR VERIFICATION
                                 -> COMPLETED -> CLOSED
                                 -> VERIFICATION FAILED -> REOPENED -> IN PROGRESS
+
+Direct request:
+SUBMITTED -> AWAITING ALL RECIPIENTS
+           -> APPROVED (all approve with deadlines)
+           -> DECLINED (any recipient declines with a reason)
+           -> DISCUSSION / MEETING REQUESTED (approval remains pending)
 ```
 
 The path is stored as configuration (`WorkflowStatus` + `StatusTransition`). Services
@@ -109,6 +123,7 @@ clients added in Phase 2 will call the same guarded service.
   - All accessible tickets
   - My tickets
   - Assigned to me
+  - Requests to review
   - Create ticket
   - Ticket workspace/detail
 - Users (admin/director scope)

@@ -7,6 +7,7 @@ def navigation_context(request):
     from communications.models import MeetingParticipant
     from accounts.models import AccountApprovalRequest
     from tickets.access import visible_tickets_for
+    from tickets.models import TicketRecipient
 
     tickets = visible_tickets_for(request.user)
     open_tickets = tickets.exclude(status__kind__in=["RESOLVED", "CLOSED"])
@@ -34,6 +35,17 @@ def navigation_context(request):
         "nav_is_it": request.user.is_it_user,
         "nav_my_tasks_count": open_tickets.filter(current_assignee=request.user).count(),
         "nav_verification_count": tickets.filter(verification_filter).count(),
+        "nav_direct_request_count": TicketRecipient.objects.filter(
+            user=request.user,
+            decision__in=[
+                TicketRecipient.Decision.PENDING,
+                TicketRecipient.Decision.DISCUSSION,
+                TicketRecipient.Decision.MEETING,
+            ],
+            ticket__request_type="DIRECT",
+        ).exclude(
+            ticket__recipient_records__decision=TicketRecipient.Decision.DECLINED,
+        ).distinct().count(),
         "nav_meetings_count": MeetingParticipant.objects.filter(
             user=request.user, response=MeetingParticipant.Response.PENDING,
         ).exclude(meeting__status__in=["COMPLETED", "CANCELLED"]).count(),

@@ -1,4 +1,22 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const requestType = document.querySelector("#id_request_type");
+  if (requestType) {
+    const updateRequestSections = () => {
+      document.querySelectorAll(".request-mode-section").forEach((section) => {
+        const inactive = section.dataset.requestMode !== requestType.value;
+        section.classList.toggle("request-mode-disabled", inactive);
+        section.inert = inactive;
+        section.querySelectorAll("input, select, textarea, button").forEach((control) => {
+          control.disabled = inactive;
+        });
+      });
+      document.querySelectorAll(".intake-note [data-request-mode]").forEach((message) => {
+        message.hidden = message.dataset.requestMode !== requestType.value;
+      });
+    };
+    requestType.addEventListener("change", updateRequestSections);
+  }
+
   document.querySelectorAll("[data-status-color]").forEach((element) => {
     element.style.setProperty("--badge", element.dataset.statusColor);
   });
@@ -104,6 +122,8 @@ document.addEventListener("DOMContentLoaded", () => {
     select.tabIndex = -1;
     updateToggle();
   });
+
+  requestType?.dispatchEvent(new Event("change"));
 
   document.querySelectorAll(".alert button").forEach((button) => {
     button.addEventListener("click", () => button.closest(".alert")?.remove());

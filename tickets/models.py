@@ -120,7 +120,12 @@ class TicketNumberSequence(models.Model):
 
 
 class Ticket(models.Model):
+    class RequestType(models.TextChoices):
+        IT = "IT", "IT support"
+        DIRECT = "DIRECT", "Direct request"
+
     ticket_number = models.CharField(max_length=30, unique=True, db_index=True)
+    request_type = models.CharField(max_length=10, choices=RequestType.choices, default=RequestType.IT, db_index=True)
     title = models.CharField(max_length=220)
     description = models.TextField()
     expected_behavior = models.TextField(blank=True)
@@ -132,9 +137,9 @@ class Ticket(models.Model):
     requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="requested_tickets")
     identified_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="identified_tickets")
     requesting_division = models.ForeignKey("core.Division", on_delete=models.PROTECT, related_name="tickets")
-    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="tickets")
-    category = models.ForeignKey(TicketCategory, on_delete=models.PROTECT, related_name="tickets")
-    priority = models.ForeignKey(TicketPriority, on_delete=models.PROTECT, related_name="tickets")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="tickets", null=True, blank=True)
+    category = models.ForeignKey(TicketCategory, on_delete=models.PROTECT, related_name="tickets", null=True, blank=True)
+    priority = models.ForeignKey(TicketPriority, on_delete=models.PROTECT, related_name="tickets", null=True, blank=True)
     status = models.ForeignKey(WorkflowStatus, on_delete=models.PROTECT, related_name="tickets")
     current_assignee = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_tickets"
@@ -183,11 +188,49 @@ class Ticket(models.Model):
             return f"{max(total // 3600, 1)}h remaining"
         return f"{total // 86400}d remaining"
 
+    @property
+    def direct_request_status(self):
+        if self.request_type != self.RequestType.DIRECT:
+            return ""
+        recipients = list(self.recipient_records.all())
+        if any(recipient.decision == TicketRecipient.Decision.DECLINED for recipient in recipients):
+            return "Declined"
+        if recipients and all(recipient.decision == TicketRecipient.Decision.APPROVED for recipient in recipients):
+            return "Approved by everyone"
+        return "Awaiting all recipients' approval"
+
     def __str__(self):
         return f"{self.ticket_number} — {self.title}"
 
     def get_absolute_url(self):
         return reverse("ticket_detail", args=[self.ticket_number])
+
+
+class TicketRecipient(models.Model):
+    class Decision(models.TextChoices):
+        PENDING = "PENDING", "Awaiting response"
+        APPROVED = "APPROVED", "Approved"
+        DECLINED = "DECLINED", "Declined"
+        DISCUSSION = "DISCUSSION", "Discussion requested"
+        MEETING = "MEETING", "Meeting requested"
+
+    ticket = models.ForeignKey(Ticket, on_delete=models.CASCADE, related_name="recipient_records")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="direct_ticket_requests")
+    decision = models.CharField(max_length=12, choices=Decision.choices, default=Decision.PENDING)
+    deadline = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    note = models.TextField(blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["user__first_name", "user__last_name"]
+        constraints = [
+            models.UniqueConstraint(fields=["ticket", "user"], name="unique_ticket_recipient"),
+        ]
+        indexes = [models.Index(fields=["user", "decision"])]
+
+    def __str__(self):
+        return f"{self.ticket.ticket_number} → {self.user.full_name}"
 
 
 class TicketAssignment(models.Model):
