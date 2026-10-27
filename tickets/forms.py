@@ -65,7 +65,7 @@ class TicketCreateForm(forms.ModelForm):
     recipients = RequesterMultipleChoiceField(
         queryset=User.objects.none(), required=False,
         widget=forms.SelectMultiple(attrs={"size": 6}),
-        help_text="Every selected person must approve before this request is fully approved.",
+        help_text="Approval is complete when all recipients have approved.",
     )
     attachments = MultipleFileField(required=False, help_text="PNG, JPG, PDF, Office, or ZIP. Maximum 10 MB each.")
 

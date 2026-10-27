@@ -4,7 +4,7 @@
 {% block extra_css %}<link rel="stylesheet" href="{% static 'css/notifications.css' %}">{% endblock %}
 {% block content %}
 <div class="page-heading heading-actions compact-heading">
-  <div><span class="eyebrow">YOUR UPDATES</span><h1>Notifications</h1><p>Monitor administrative workflows including ticket assignments, updates, formal verifications and pending actions.</p></div>
+  <div><h1>Notifications</h1><p>Monitor administrative workflows including ticket assignments, updates, formal verifications and pending actions.</p></div>
   {% if unread_notification_count %}<form method="post" action="{% url 'notifications_read_all' %}">{% csrf_token %}<button class="btn btn-secondary">✓ Mark all as read</button></form>{% endif %}
 </div>
 <div class="scope-tabs">
@@ -29,7 +29,7 @@
     {% if not item.is_read %}<i></i>{% endif %}<b>→</b>
   </a>
   {% empty %}
-  <div class="empty-state"><span>✓</span><h3>No notifications found</h3><p>{% if filter_form.errors %}Please correct the date filters above.{% else %}Try changing the filters. New work and collaboration updates will appear here.{% endif %}</p></div>
+  <div class="empty-state"><span>✓</span><h3>No notifications to displayd</h3><p>{% if filter_form.errors %}Please correct the date filters above.{% else %}Try changing the filters. New work and collaboration updates will appear here.{% endif %}</p></div>
   {% endfor %}
   {% if page_obj.paginator.count %}
   <nav class="notification-pagination" aria-label="Notification pages">
